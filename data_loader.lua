@@ -162,7 +162,7 @@ end
 
 function data_loader:finalize()
 
-    -- TODO: Calculate mean and standard deviation
+    self:calc_mean_std()
 
 end
 
@@ -174,7 +174,7 @@ function data_loader:get_train_example()
 
     assert(ex)
 
-    return self:get_example(ex)
+    return self:get_example(ex, false)
 
 end
 
@@ -188,11 +188,11 @@ function data_loader:get_test_example(a_which)
 
     assert(ex)
 
-    return self:get_example(ex)
+    return self:get_example(ex, true)
 
 end
 
-function data_loader:get_example(a_ex)
+function data_loader:get_example(a_ex, a_isTest)
 
     local imgPath = a_ex.im
     local gtPath = a_ex.gt
@@ -209,14 +209,28 @@ function data_loader:get_example(a_ex)
         assert(img:size(i) == gt:size(i), 'The image and truth weren\'t the same size.')
     end
 
-    data = self:prepare_data(img, imgPath)
+    data = self:prepare_data(img, imgPath, a_isTest)
     labels = self:prepare_gt(gt)
      
     return data, labels
 
 end
 
-function data_loader:prepare_data(img, imgId)
+function data_loader:prepare_data(a_img, a_imgId, a_isTest)
+
+    if not a_isTest then
+        self:apply_deforms(a_img, a_imgId)
+    end
+
+    -- Mean center and divide by standard deviation
+    for i=1,a_img:size(1) do
+        local s = a_img:select(1, i)
+        
+        s:add(-self.m_mean[i])
+        s:div(self.m_std[i])
+    end
+
+    return a_img
 
 end
 
@@ -269,6 +283,56 @@ end
 
 function data_loader:calc_mean_std()
 
+    print('Calculating mean and standard deviation.')
+
+    local pSum = torch.FloatTensor(3):zero()
+
+    local sList = { }
+
+    for i=1,#self.m_train do
+        
+        local imPath = self.m_train[i].im
+
+        assert(paths.filep(imPath), 'Invalid image path')
+
+        local data = image.load(imPath)
+
+        assert(data)
+        assert(data:dim() == 3)
+
+        local imSum = data:sum(2):sum(3):div(data:size(2) * data:size(3))
+
+        table.insert(sList, imSum)
+        pSum:add(imSum)
+
+        if i % 10 == 0 then
+            collectgarbage()
+        end
+
+    end
+
+    local mean = pSum:mul(1.0 / #sList)
+
+    local std = torch.FloatTensor(3):zero()
+    for i=1,#sList do
+        local d = sList[i]:clone():add(-1, mean)
+
+        d:cmul(d)
+
+        std:add(d)
+    end
+
+    std:mul(1.0 / #sList)
+    std:sqrt()
+
+    print('Mean:')
+    print(mean)
+
+    print('Standard Deviation')
+    print(std)
+
+    self.m_mean = mean
+    self.m_std = std
 
 end
 

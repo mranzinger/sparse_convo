@@ -14,19 +14,19 @@ function create_loc_net()
 
     local model = nn.Sequential()
 
-    create_33_module(model, 3, 32, 2)
+    create_33_module(model, 3, 32, 4)
 
     model:add(cudnn.SpatialMaxPooling(2, 2,
                                       2, 2))
 
-    create_33_module(model, 32, 64, 2) 
+    create_33_module(model, 32, 64, 4) 
 
     model:add(cudnn.SpatialMaxPooling(2, 2,
                                       2, 2))
 
-    create_33_module(model, 64, 128, 2)
+    create_33_module(model, 64, 128, 3)
 
-    create_33_module(model, 128, 64, 2)
+    create_33_module(model, 128, 64, 3)
 
     create_33_module(model, 64, 32, 2)
 

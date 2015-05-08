@@ -29,7 +29,10 @@ else
 end
 
 if paths.filep('best.t7') then
+    print('Found an existing checkpoint. Loading.')
     net = torch.load('best.t7')
+
+    print('Error:', net.err, 'Accuracy:', net.acc)
 end
 
 local model = net.model
@@ -61,7 +64,7 @@ gpuLabels = torch.CudaTensor()
 
 timer = torch.Timer()
 
-local batchCounter = 0
+local batchCounter = net.bc or 0
 
 local bestErr = net.err
 
@@ -133,7 +136,7 @@ while true do
         local exGtPath = loader.m_test[i].gt
 
         lfs.chdir(pwd .. '/preds_last/image')
-        os.execute('cp ' .. exImPath .. ' ' .. tostring(i) .. 
+        os.execute('cp ' .. exImPath .. ' ' .. tostring(i) .. lazy_ext(exImPath)) 
         lfs.chdir(pwd .. '/preds_last/gt')
         image.save(tostring(i) .. '.png', labels)
         lfs.chdir(pwd .. '/preds_last/pred')
@@ -150,6 +153,8 @@ while true do
     print(s)    
 
     net.err = err
+    net.acc = accuracy
+    net.bc = batchCounter
 
     sanitize_model(model)
     torch.save('last.t7', net)
@@ -157,9 +162,10 @@ while true do
     if err < bestErr then
         bestErr = err
 
+        print('This checkpoint is the new best!!!')
+
         torch.save('best.t7', net)
 
-        --lfs.rmdir('preds_best')
         os.execute('rm -rf preds_best')
         os.execute('cp -r preds_last preds_best')
     end

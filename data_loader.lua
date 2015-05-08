@@ -56,9 +56,10 @@ function data_loader:find_examples(a_dsDir)
 
             for p in lfs.dir(z) do
                 
-                if string.endsWithAny(p, '.png', '.jpg') then
+                if string.endsWithAny(p, '.png', '.jpg', '.bmp') then
                 
-                    local isTruth = string.find(p, 'GT') ~= nil
+                    local isTruth = string.find(p, 'GT') ~= nil or
+                                    string.find(p, 'gt') ~= nil
 
                     local numS, numE = string.find(p, '%d+')
 
@@ -205,14 +206,61 @@ function data_loader:get_example(a_ex, a_isTest)
     assert(img and gt)
     assert(img:dim() == 3, 'The image has the wrong dimensionality!')
     assert(img:dim() == gt:dim(), 'The image and truth were not the same dimension!')
+
+    img = self:strip_alpha(img)
+    gt  = self:strip_alpha(gt)
+
     for i=1,img:dim() do
-        assert(img:size(i) == gt:size(i), 'The image and truth weren\'t the same size.')
+        if img:size(i) ~= gt:size(i) then
+            print('Image:', imgPath)
+            print(img:size())
+            print('Truth:', gtPath)
+            print(gt:size())
+            error('The image and truth weren\'t the same size.')
+        end
     end
+
+    -- Max Dim: 1280
+    local mxDim = 2
+    if img:size(3) > img:size(2) then mxDim = 3 end
+
+    local newDim = math.floor(torch.uniform(160, 1280) + 0.5)
+    if a_isTest then
+        newDim = math.min(1280, img:size(mxDim))
+    end
+
+    --if img:size(mxDim) > 1280 then
+    local scale = newDim / img:size(mxDim)
+
+    if scale ~= 1 then
+        --print('Downscaling Image.', scale)
+
+        local newH = math.floor(img:size(2) * scale + 0.5)
+        local newW = math.floor(img:size(3) * scale + 0.5)
+
+        img = image.scale(img, newW, newH)
+        gt  = image.scale(gt,  newW, newH)
+    end
+    --end
 
     data = self:prepare_data(img, imgPath, a_isTest)
     labels = self:prepare_gt(gt)
      
     return data, labels
+
+end
+
+function data_loader:strip_alpha(a_img)
+
+    if a_img:size(1) == 1 then
+        return torch.expand(a_img, 3, a_img:size(2), a_img:size(3))
+    elseif a_img:size(1) == 4 then
+        return a_img:narrow(1,1,3)
+    elseif a_img:size(1) == 3 then
+        return a_img
+    else
+        error('Invalid number of image channels')
+    end
 
 end
 

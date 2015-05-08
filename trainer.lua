@@ -1,10 +1,14 @@
 require 'torch'
+require 'cutorch'
 torch.setdefaulttensortype('torch.FloatTensor')
 
+cutorch.setDevice(3)
 
 require 'build_network.lua'
 require 'optim'
 require 'data_loader'
+require 'utils'
+require 'train_utils'
 
 local net, crit = create_loc_net()
 
@@ -22,6 +26,10 @@ else
 
     torch.save('loader.t7', loader)
 
+end
+
+if paths.filep('best.t7') then
+    net = torch.load('best.t7')
 end
 
 local model = net.model
@@ -42,6 +50,10 @@ model:cuda()
 
 --d,l = loader:get_train_example()
 
+local pwd = lfs.currentdir()
+
+print('Current Dir:', pwd)
+
 print('Batch #', 'Loss', 'Accuracy', 'Total Time (s)')
 
 gpuData = torch.CudaTensor()
@@ -57,10 +69,10 @@ while true do
 
     print('Training!')
     model:training()
-    for i=1,1000 do
+    for i=1,100 do
         timer:reset()
 
-        local data, labels = get_train_example()
+        local data, labels = loader:get_train_example()
         
         gpuData:resize(data:size()):copy(data)
         gpuLabels:resize(labels:size()):copy(labels)
@@ -72,7 +84,7 @@ while true do
                                         crit) 
         cutorch.synchronize()
 
-        local accuracy = get_accuracy(pred:float(), labels)
+        local accuracy = get_heat_accuracy(pred:float(), labels)
 
         local totalTime = timer:time().real
 
@@ -91,27 +103,46 @@ while true do
 
     print('Testing!')
     model:evaluate()
-    local totalCorrect = 0
+    local totalAcc = 0
     local totalErr = 0
     
+    if not paths.dirp('preds_last') then
+        lfs.mkdir('preds_last')
+        lfs.mkdir('preds_last/image')
+        lfs.mkdir('preds_last/gt')
+        lfs.mkdir('preds_last/pred')
+    end
+
+
     for i=1,loader:num_test_examples() do
 
-        local data, labels = get_test_example(i)
+        local data, labels = loader:get_test_example(i)
 
         gpuData:resize(data:size()):copy(data)
         gpuLabels:resize(labels:size()):copy(labels)
 
         local output = model:forward(gpuData)
-        local err = crit:forward(output, labels)
+        local err = crit:forward(output, gpuLabels)
         cutorch.synchronize()
         local pred = output:float()
 
-        totalCorrect = totalCorrect + get_num_correct(pred, labels)
+        totalAcc = totalAcc + get_heat_accuracy(pred, labels)
         totalErr = totalErr + err
+
+        local exImPath = loader.m_test[i].im
+        local exGtPath = loader.m_test[i].gt
+
+        lfs.chdir(pwd .. '/preds_last/image')
+        os.execute('cp ' .. exImPath .. ' ' .. tostring(i) .. 
+        lfs.chdir(pwd .. '/preds_last/gt')
+        image.save(tostring(i) .. '.png', labels)
+        lfs.chdir(pwd .. '/preds_last/pred')
+        image.save(tostring(i) .. '.png', pred)
+        lfs.chdir(pwd)
 
     end
 
-    local accuracy = totalCorrect / loader:num_test_examples()
+    local accuracy = totalAcc / loader:num_test_examples()
     local err = totalErr / loader:num_test_examples()
 
     local s = string.format("TEST    %10.6f    %6.4f",
@@ -120,12 +151,17 @@ while true do
 
     net.err = err
 
+    sanitize_model(model)
     torch.save('last.t7', net)
 
     if err < bestErr then
         bestErr = err
 
         torch.save('best.t7', net)
+
+        --lfs.rmdir('preds_best')
+        os.execute('rm -rf preds_best')
+        os.execute('cp -r preds_last preds_best')
     end
 
 

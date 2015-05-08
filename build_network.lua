@@ -41,8 +41,11 @@ function create_loc_net()
     for i=1,model:size() do
         init_layer_ms(model:get(i))
     end
+
+    crit = nn.MyBCECriterion()
+    crit.fullAverage = true
         
-    return { err = 100000, model = model:cuda() }, nn.MyBCECriterion():cuda()
+    return { err = 100000, model = model:cuda() }, crit:cuda()
 
 end
 

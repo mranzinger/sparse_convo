@@ -42,10 +42,12 @@ local model = net.model
 loader:study_net(model)
 
 local optimState = {
-    learningRate = 0.01,
+    learningRate = net.lr or 0.01,
     momentum     = 0.90,
     weightDecay  = 0.0005
 }
+
+print('Learning Rate:', optimState.learningRate)
 
 local optimizer = nn.Optim(model, optimState)
 
@@ -68,6 +70,8 @@ local batchCounter = net.bc or 0
 
 local bestErr = net.err
 
+local nbCt = 0
+
 while true do
 
     print('Training!')
@@ -76,6 +80,14 @@ while true do
         timer:reset()
 
         local data, labels = loader:get_train_example()
+       
+        if data:dim() == 3 then
+            data = data:view(1, data:size(1), data:size(2), data:size(3))
+        end
+        
+        if labels:dim() == 3 then
+            labels = labels:view(1, labels:size(1), labels:size(2), labels:size(3))
+        end 
         
         gpuData:resize(data:size()):copy(data)
         gpuLabels:resize(labels:size()):copy(labels)
@@ -155,12 +167,14 @@ while true do
     net.err = err
     net.acc = accuracy
     net.bc = batchCounter
+    net.lr = optimState.learningRate
 
     sanitize_model(model)
     torch.save('last.t7', net)
 
     if err < bestErr then
         bestErr = err
+        nbCt = 0
 
         print('This checkpoint is the new best!!!')
 
@@ -168,6 +182,14 @@ while true do
 
         os.execute('rm -rf preds_best')
         os.execute('cp -r preds_last preds_best')
+    else
+        nbCt = nbCt + 1 
+
+        if nbCt == 5 then
+            optimState.learningRate = optimState.learningRate / 2
+            print('NEW LEARNING RATE:', optimState.learningRate)
+            nbCt = 0
+        end
     end
 
 

@@ -41,8 +41,10 @@ end
 
 function get_heat_num_correct(a_preds, a_labels, a_tolerance)
 
-    assert(a_preds and a_labels)
-    assert(a_preds:dim() == a_labels:dim())
+    assert(a_preds, 'Predictions tensor was not valid')
+    assert(a_labels, 'Labels tensor was not valid')
+    assert(a_preds:dim() == a_labels:dim(),
+           'Preds and Labels tensors are not the same dimension')
 
     local subs = (a_labels - a_preds):abs()
 

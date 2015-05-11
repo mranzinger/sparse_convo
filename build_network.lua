@@ -26,11 +26,23 @@ function create_loc_net()
 
     create_33_module(model, 64, 128, 3)
 
-    create_33_module(model, 128, 64, 3)
+    model:add(cudnn.SpatialMaxPooling(2, 2,
+                                      2, 2))
 
-    create_33_module(model, 64, 32, 2)
+    create_33_module(model, 128, 64, 1)
 
-    model:add(cudnn.SpatialConvolution(32,
+    --model:add(nn.SpatialZeroPadding(10, 10, 10, 10))
+
+    --model:add(nn.SpatialConvolutionCuFFT(64,
+    --                                     32,
+    --                                     21, 21))
+
+    create_nn_module(model, 64, 64, 5, 7)
+
+    --create_nn_module(model, 32, 32, 1, 13)
+    --create_33_module(model, 64, 32, 2)
+
+    model:add(cudnn.SpatialConvolution(64,
                                        1,
                                        1, 1,
                                        1, 1,
@@ -51,14 +63,24 @@ end
 
 function create_33_module(a_model, a_from, a_to, a_num)
 
+    create_nn_module(a_model, a_from, a_to, a_num, 3)
+
+end
+
+function create_nn_module(a_model, a_from, a_to, a_num, a_k)
+    
+    local pad = (a_k - 1) / 2
+
+    print(pad)
+
     local prev = a_from
 
     for i=1,a_num do
         a_model:add(cudnn.SpatialConvolution(prev,
                                              a_to,
-                                             3, 3,
+                                             a_k, a_k,
                                              1, 1,
-                                             1, 1))
+                                             pad, pad))
         a_model:add(cudnn.ReLU(true))
 
         prev = a_to

@@ -11,7 +11,7 @@ LIST(APPEND CUDA_NVCC_FLAGS "-arch=sm_30")
 INCLUDE_DIRECTORIES("${Torch_INSTALL_INCLUDE}/THC")
 LINK_DIRECTORIES("${Torch_INSTALL_LIB}")
 
-SET(src-sparseconvo cuda/init.cu)
+SET(src-sparseconvo src/init.cu)
 
 FILE(GLOB luasrc lua/*.lua)
 

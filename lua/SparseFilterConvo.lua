@@ -25,13 +25,13 @@ function SparseFilterConvo:reset(sdv)
     -- planes and accumulate partial convolutions into the output buffer
     local weightSizes = torch.LongStorage{self.m_nInputPlanes,
                                           self.m_nOutputPlanes,
-                                          self.m_kH,
-                                          self.m_kW}
+                                          self.m_kH * self.m_kW}
 
     -- Use the Microsoft initialization method
     self.weight = torch.randn(weightSizes):float()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
     self.output = torch.FloatTensor()
+    self.opProcMat = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()
 
     local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_kH * self.m_kW))
@@ -43,6 +43,7 @@ function SparseFilterConvo:reset(sdv)
         self.weight = self.weight:cuda()
         self.bias = self.bias:cuda()
         self.output = self.output:cuda()
+        self.opProcMat = self.opProcMat:cuda()
         self.gradInput = self.gradInput:cuda()
     end
 
@@ -66,10 +67,17 @@ function SparseFilterConvo:updateOutput(input)
                        vInput:size(3),
                        vInput:size(4))
 
+    -- op += w_i * P
+    -- w_i: input channel weights
+    -- P: unrolled input matrix
+    --      each row is the kernel about x,y
+    --      each column is an x,y pixel
+    self.opProcMat:resize(self.m_kW * self.m_kH, self.m_nOutputPlanes)
+
     if self.m_isCuda then
-        input.nn.SparseFilterConvo_cu_updateOutput(self, input)
+        input.nn.SparseFilterConvo_cu_updateOutput(self, vInput)
     else
-        input.nn.SparseFilterConvo_cpu_updateOutput(self, input)
+        input.nn.SparseFilterConvo_cpu_updateOutput(self, vInput)
     end
 
     return self.output
@@ -140,8 +148,6 @@ function SparseFilterConvo:prepareSystem(ts)
     end
 
     self.m_nInputPlanes = ts:size(chanIdx)
-
-    print('# Input Planes:', self.m_nInputPlanes)
 
     -- Initialize the weights
     self:reset()

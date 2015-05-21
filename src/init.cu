@@ -10,7 +10,7 @@ int luaopen_libsparseconvo(lua_State *L)
 {
     lua_newtable(L);
     sc_SparseFilterConvo_cu_init(L);
-    sc_SparseFilterConvo_cpp_init(L);
+    sc_SparseFilterConvo_cpu_init(L);
 
     return 1;
 }

@@ -15,7 +15,7 @@ function SparseFilterConvo:__init(nOutputPlanes,
     self.m_dkH = dkH or 2
 end
 
-function SparseFilterConvo:reset()
+function SparseFilterConvo:reset(sdv)
     
     -- Input planes are the outer dimension so that we can stream in
     -- planes and accumulate partial convolutions into the output buffer
@@ -27,8 +27,10 @@ function SparseFilterConvo:reset()
     -- Use the Microsoft initialization method
     self.weights = torch.randn(weightSizes):float()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
+    self.output = torch.FloatTensor()
+    self.gradInput = torch.FloatTensor()
 
-    local sdv = math.sqrt(2.0 / (self.m_nInputPlanes * self.m_kH * self.m_kW))
+    local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_kH * self.m_kW))
 
     self.weights:mul(sdv)
 
@@ -36,35 +38,69 @@ function SparseFilterConvo:reset()
     if self.m_isCuda then
         self.weights = self.weights:cuda()
         self.bias = self.bias:cuda()
+        self.output = self.output:cuda()
+        self.gradInput = self.gradInput:cuda()
     end
 
 end
 
 function SparseFilterConvo:updateOutput(input)
-    --TODO: Implement Me!
     
-    if torch.type(input) == 'torch.FloatTensor' then 
-        input.nn.SparseFilterConvo_cpu_updateOutput(self, input)
-    elseif torch.type(input) == 'torch.CudaTensor' then
+    self:prepareSystem(input)
+
+    local vInput
+    if input:dim() == 3 then
+        vInput = input:view(1, input:size(1), input:size(2), input:size(3))
+    elseif input:dim() == 4 then
+        vInput = input
+    else
+        error('Invalid input dimension!')
+    end
+
+    self.output:resize(vInput:size(1),
+                       self.m_nOutputPlanes,
+                       vInput:size(3),
+                       vInput:size(4))
+
+    if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateOutput(self, input)
     else
-        error('Invalid tensor type: ' .. torch.type(input))
+        input.nn.SparseFilterConvo_cpu_updateOutput(self, input)
     end
 
     return self.output
+     
 end
 
 function SparseFilterConvo:updateGradInput(input, gradOutput)
-    --TODO: Implement Me!
-    input.nn.SparseFilterConvo_updateGradInput(self, input, gradOutput)
+    
+    assert(self.m_isCuda == self:isCuda(input))
+    assert(self.m_isCuda == self:isCuda(gradOutput))
+    
+    self.gradInput:resize(input:size())
+
+    if self.m_isCuda then
+        input.nn.SparseFilterConvo_cu_updateGradInput(self, input, gradOutput)
+    else
+        input.nn.SparseFilterConvo_cpu_updateGradInput(self, input, gradOutput)
+    end
 
     return self.gradInput
 end
 
 function SparseFilterConvo:accGradParameters(input, gradOutput, scale)
-    scale = scale or 1
-    --TODO: Implement Me!
-    input.nn.SparseFilterConvo_accGradParameters(self, input, gradOutput, scale)
+
+    assert(self.m_isCuda == self:isCuda(input))
+    assert(self.m_isCuda == self:isCuda(gradOutput))
+
+    local scale = scale or 1
+    
+    if self.m_isCuda then
+        input.nn.SparseFilterConvo_cu_accGradParameters(self, input, gradOutput, scale)
+    else
+        input.nn.SparseFilterConvo_cpu_accGradParameters(self, input, gradOutput, scale)
+    end
+
 end
 
 function SparseFilterConvo::isCuda(ts)

@@ -1,5 +1,8 @@
 #include <iostream>
 
+#include "luaT.h"
+#include "THC.h"
+
 using namespace std;
 
 namespace sparse_convo { namespace cuda {

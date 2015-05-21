@@ -17,26 +17,30 @@ end
 
 function SparseFilterConvo:reset(sdv)
     
+    if not self.m_isPrepared then
+        return
+    end
+    
     -- Input planes are the outer dimension so that we can stream in
     -- planes and accumulate partial convolutions into the output buffer
-    local weightSizes = torch.LongStorage(self.m_nInputPlanes,
+    local weightSizes = torch.LongStorage{self.m_nInputPlanes,
                                           self.m_nOutputPlanes,
                                           self.m_kH,
-                                          self.m_kW)
+                                          self.m_kW}
 
     -- Use the Microsoft initialization method
-    self.weights = torch.randn(weightSizes):float()
+    self.weight = torch.randn(weightSizes):float()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
     self.output = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()
 
     local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_kH * self.m_kW))
 
-    self.weights:mul(sdv)
+    self.weight:mul(sdv)
 
     -- If CUDA, then move the weights to the device
     if self.m_isCuda then
-        self.weights = self.weights:cuda()
+        self.weight = self.weight:cuda()
         self.bias = self.bias:cuda()
         self.output = self.output:cuda()
         self.gradInput = self.gradInput:cuda()
@@ -103,7 +107,7 @@ function SparseFilterConvo:accGradParameters(input, gradOutput, scale)
 
 end
 
-function SparseFilterConvo::isCuda(ts)
+function SparseFilterConvo:isCuda(ts)
 
     if not ts then
         error('Invalid nil tensor')
@@ -117,7 +121,7 @@ function SparseFilterConvo::isCuda(ts)
 
 end
 
-function SparseFilterConvo::prepareSystem(ts)
+function SparseFilterConvo:prepareSystem(ts)
 
     local isCuda = self:isCuda(ts)
 
@@ -126,6 +130,7 @@ function SparseFilterConvo::prepareSystem(ts)
         return
     end
 
+    self.m_isPrepared = true
     self.m_isCuda = isCuda
 
     local chanIdx = 1
@@ -135,6 +140,8 @@ function SparseFilterConvo::prepareSystem(ts)
     end
 
     self.m_nInputPlanes = ts:size(chanIdx)
+
+    print('# Input Planes:', self.m_nInputPlanes)
 
     -- Initialize the weights
     self:reset()

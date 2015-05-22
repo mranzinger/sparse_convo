@@ -25,7 +25,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
     int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
     
-    const auto weight = get_mem_tensor(L, "weight");
+    const auto weights = get_mem_tensor(L, "weight");
     const auto bias   = get_mem_tensor(L, "bias");
     auto opProcMat = get_mem_tensor(L, "opProcMat");
     auto output = get_mem_tensor(L, "output");
@@ -81,12 +81,21 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
         }
     }
 
+    const int64_t hkW = (kW / 2) * dkW;
+    const int64_t hkH = (kH / 2) * dkH;
+
     auto wvTensor = THFloatTensor_new();
+    auto ovTensor = THFloatTensor_new();
+    auto ovSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
 
     for (i = 0; i < batchSize; ++i)
     {
         const auto pInputImg = pInputData + i * inputImgSize;
-        auto pOutputImg = pOutputData + i * outputImgSize;
+        //auto pOutputImg = pOutputData + i * outputImgSize;
+
+        // Create a matrix view of the current output buffer
+        THFloatTensor_select(ovTensor, output, 0, i);
+        THFloatTensor_reshape(ovTensor, nullptr, ovSize);
 
         for (k = 0; k < nInputPlane; ++k)
         {
@@ -97,9 +106,9 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
             const auto pInputChan = pInputImg + k * chanSize;
 
             int64_t r, c, mR = 0;
-            for (int64_t kR = -(kH / 2); kR <= (kH / 2); ++kR)
+            for (int64_t kR = -hkH; kR <= hkH; kR += dkH)
             {
-                for (int64_t kC = -(kW / 2); kC < (kW / 2); ++kC, ++mR)
+                for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++mR)
                 {
                     #pragma omp parallel for private(r)
                     for (r = 0; r < height; ++r)
@@ -119,15 +128,21 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
                                 val = pInputChan[ipR * width + ipC];
                             }
 
-
+                            pProcData[mR * chanSize + mC] = val;
                         }
                     }
                 }
             }
+
+            //Now that the matrix is filled out, do the multiply and accumulate into
+            // the ovTensor view
+            THFloatTensor_addmm(ovTensor, 1.0f, ovTensor, 1.0f, wvTensor, opProcMat);
         }
     }
 
     THFloatTensor_free(wvTensor);
+    THFloatTensor_free(ovTensor);
+    THLongStorage_free(ovSize);
 
     return 1;
 }

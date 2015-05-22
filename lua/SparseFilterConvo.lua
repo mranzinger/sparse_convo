@@ -72,7 +72,7 @@ function SparseFilterConvo:updateOutput(input)
     -- P: unrolled input matrix
     --      each row is the kernel about x,y
     --      each column is an x,y pixel
-    self.opProcMat:resize(self.m_kW * self.m_kH, self.m_nOutputPlanes)
+    self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateOutput(self, vInput)

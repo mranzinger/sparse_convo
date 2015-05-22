@@ -1,4 +1,5 @@
 #include <iostream>
+#include <assert.h>
 
 #include "luaT.h"
 #include "TH.h"
@@ -34,6 +35,13 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
          << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
          << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
 
+    assert(THFloatTensor_nDimension(opProcMat) == 2);
+
+    cout << "OP Proc Mat: ["
+         << THFloatTensor_size(opProcMat, 0) << " x "
+         << THFloatTensor_size(opProcMat, 1) << "]"
+         << endl;
+
     luaL_argcheck(L, input->nDimension == 4, 2, "Only a 4D (batch mode) tensor is supported");
    
     const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
@@ -67,6 +75,8 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 
     int64_t i,j,k;
 
+    cout << "Filling Biases" << endl;
+
     // Initialize the output to the biases
     for (i = 0; i < batchSize; ++i)
     {
@@ -84,24 +94,52 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     const int64_t hkW = (kW / 2) * dkW;
     const int64_t hkH = (kH / 2) * dkH;
 
+    cout << "Half Kernel Size: ["
+         << hkW << ", " << hkH << "]" << endl;
+
     auto wvTensor = THFloatTensor_new();
     auto ovTensor = THFloatTensor_new();
     auto ovSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
 
+    cout << "Created temporary tensors" << endl;
+
     for (i = 0; i < batchSize; ++i)
     {
+        cout << "Processing Image: " << i << endl;
+
         const auto pInputImg = pInputData + i * inputImgSize;
         //auto pOutputImg = pOutputData + i * outputImgSize;
 
+        cout << "Creating output view" << endl;
+
         // Create a matrix view of the current output buffer
         THFloatTensor_select(ovTensor, output, 0, i);
-        THFloatTensor_reshape(ovTensor, nullptr, ovSize);
+
+        cout << "Selected current output image" << endl;
+
+        THFloatTensor_reshape(ovTensor, ovTensor, ovSize);
+
+        assert(THFloatTensor_nDimension(ovTensor) == 2);
+
+        cout << "Output view: ["
+             << THFloatTensor_size(ovTensor, 0) << " x "
+             << THFloatTensor_size(ovTensor, 1) << "]"
+             << endl;
 
         for (k = 0; k < nInputPlane; ++k)
         {
+            cout << "Processing input plane: " << k << endl;
+
             // Get a matrix view of the weights for the current
             // input channel
             THFloatTensor_select(wvTensor, weights, 0, k);
+
+            assert(THFloatTensor_nDimension(wvTensor) == 2);
+
+            cout << "Weight view: ["
+                 << THFloatTensor_size(wvTensor, 0) << " x "
+                 << THFloatTensor_size(wvTensor, 1) << "]"
+                 << endl;
 
             const auto pInputChan = pInputImg + k * chanSize;
 

@@ -31,30 +31,30 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     auto opProcMat = get_mem_tensor(L, "opProcMat");
     auto output = get_mem_tensor(L, "output");
 
-    cout << "Update Output:" << endl
-         << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
-         << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
+    //cout << "Update Output:" << endl
+    //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
+    //     << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
 
     assert(THFloatTensor_nDimension(opProcMat) == 2);
 
-    cout << "OP Proc Mat: ["
-         << THFloatTensor_size(opProcMat, 0) << " x "
-         << THFloatTensor_size(opProcMat, 1) << "]"
-         << endl;
+    //cout << "OP Proc Mat: ["
+    //     << THFloatTensor_size(opProcMat, 0) << " x "
+    //     << THFloatTensor_size(opProcMat, 1) << "]"
+    //     << endl;
 
     luaL_argcheck(L, input->nDimension == 4, 2, "Only a 4D (batch mode) tensor is supported");
    
     const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
     const int64_t nInputPlane = luaT_getfieldcheckint(L, 1, "m_nInputPlanes");
 
-    cout << "Input Planes: " << nInputPlane << endl
-         << "Output Planes: " << nOutputPlane << endl;
+    //cout << "Input Planes: " << nInputPlane << endl
+    //     << "Output Planes: " << nOutputPlane << endl;
 
     const int64_t width = input->size[3];
     const int64_t height = input->size[2];
 
-    cout << "Width: " << width << endl
-         << "Height: " << height << endl;
+    //cout << "Width: " << width << endl
+    //     << "Height: " << height << endl;
 
     // NOTE: Padding is assumed, so input sizes equal output sizes,
     // except for the number of planes
@@ -63,10 +63,10 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     const int64_t inputImgSize = nInputPlane * chanSize;
     const int64_t outputImgSize = nOutputPlane * chanSize;
 
-    cout << "Batch Size: " << batchSize << endl
-         << "Channel Size: " << chanSize << endl
-         << "Input Image Size: " << inputImgSize << endl
-         << "Output Image Size: " << outputImgSize << endl;
+    //cout << "Batch Size: " << batchSize << endl
+    //     << "Channel Size: " << chanSize << endl
+    //     << "Input Image Size: " << inputImgSize << endl
+    //     << "Output Image Size: " << outputImgSize << endl;
 
     auto pOutputData = THFloatTensor_data(output);
     const auto pInputData = THFloatTensor_data(input);
@@ -75,7 +75,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 
     int64_t i,j,k;
 
-    cout << "Filling Biases" << endl;
+    //cout << "Filling Biases" << endl;
 
     // Initialize the output to the biases
     for (i = 0; i < batchSize; ++i)
@@ -94,41 +94,41 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     const int64_t hkW = (kW / 2) * dkW;
     const int64_t hkH = (kH / 2) * dkH;
 
-    cout << "Half Kernel Size: ["
-         << hkW << ", " << hkH << "]" << endl;
+    //cout << "Half Kernel Size: ["
+    //     << hkW << ", " << hkH << "]" << endl;
 
     auto wvTensor = THFloatTensor_new();
     auto ovTensor = THFloatTensor_new();
     auto ovSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
 
-    cout << "Created temporary tensors" << endl;
+    //cout << "Created temporary tensors" << endl;
 
     for (i = 0; i < batchSize; ++i)
     {
-        cout << "Processing Image: " << i << endl;
+        //cout << "Processing Image: " << i << endl;
 
         const auto pInputImg = pInputData + i * inputImgSize;
         //auto pOutputImg = pOutputData + i * outputImgSize;
 
-        cout << "Creating output view" << endl;
+        //cout << "Creating output view" << endl;
 
         // Create a matrix view of the current output buffer
         THFloatTensor_select(ovTensor, output, 0, i);
 
-        cout << "Selected current output image" << endl;
+        //cout << "Selected current output image" << endl;
 
         THFloatTensor_reshape(ovTensor, ovTensor, ovSize);
 
         assert(THFloatTensor_nDimension(ovTensor) == 2);
 
-        cout << "Output view: ["
-             << THFloatTensor_size(ovTensor, 0) << " x "
-             << THFloatTensor_size(ovTensor, 1) << "]"
-             << endl;
+        //cout << "Output view: ["
+        //     << THFloatTensor_size(ovTensor, 0) << " x "
+        //     << THFloatTensor_size(ovTensor, 1) << "]"
+        //     << endl;
 
         for (k = 0; k < nInputPlane; ++k)
         {
-            cout << "Processing input plane: " << k << endl;
+            //cout << "Processing input plane: " << k << endl;
 
             // Get a matrix view of the weights for the current
             // input channel
@@ -136,10 +136,10 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 
             assert(THFloatTensor_nDimension(wvTensor) == 2);
 
-            cout << "Weight view: ["
-                 << THFloatTensor_size(wvTensor, 0) << " x "
-                 << THFloatTensor_size(wvTensor, 1) << "]"
-                 << endl;
+            //cout << "Weight view: ["
+            //     << THFloatTensor_size(wvTensor, 0) << " x "
+            //     << THFloatTensor_size(wvTensor, 1) << "]"
+            //     << endl;
 
             const auto pInputChan = pInputImg + k * chanSize;
 
@@ -178,6 +178,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
         }
     }
 
+    // Free the processing buffers
     THFloatTensor_free(wvTensor);
     THFloatTensor_free(ovTensor);
     THLongStorage_free(ovSize);
@@ -201,16 +202,18 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
     auto gradInput = get_mem_tensor(L, "gradInput"); 
     auto opProcMat = get_mem_tensor(L, "opProcMat");
 
-    cout << "Update Grad Input:" << endl
-         << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
-         << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
+    //cout << "Update Grad Input:" << endl
+    //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
+    //     << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
+
+    THFloatTensor_zero(gradInput);
 
     assert(THFloatTensor_nDimension(opProcMat) == 2);
 
-    cout << "OP Proc Mat: ["
-         << THFloatTensor_size(opProcMat, 0) << " x "
-         << THFloatTensor_size(opProcMat, 1) << "]"
-         << endl;
+    //cout << "OP Proc Mat: ["
+    //     << THFloatTensor_size(opProcMat, 0) << " x "
+    //     << THFloatTensor_size(opProcMat, 1) << "]"
+    //     << endl;
 
     luaL_argcheck(L, 
                   input->nDimension == 4 && gradOutput->nDimension == 4, 
@@ -219,50 +222,49 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
     const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
     const int64_t nInputPlane = luaT_getfieldcheckint(L, 1, "m_nInputPlanes");
 
-    cout << "Input Planes: " << nInputPlane << endl
-         << "Output Planes: " << nOutputPlane << endl;
+    //cout << "Input Planes: " << nInputPlane << endl
+    //     << "Output Planes: " << nOutputPlane << endl;
 
     const int64_t width = input->size[3];
     const int64_t height = input->size[2];
 
-    cout << "Width: " << width << endl
-         << "Height: " << height << endl;
+    //cout << "Width: " << width << endl
+    //     << "Height: " << height << endl;
 
     const int64_t batchSize = input->size[0];
     const int64_t chanSize = width * height;
-    const int64_t inputImgSize = nInputPlane * chanSize;
-    const int64_t outputImgSize = nOutputPlane * chanSize;
+    //const int64_t inputImgSize = nInputPlane * chanSize;
+    //const int64_t outputImgSize = nOutputPlane * chanSize;
 
-    cout << "Batch Size: " << batchSize << endl
-         << "Channel Size: " << chanSize << endl
-         << "Input Image Size: " << inputImgSize << endl
-         << "Output Image Size: " << outputImgSize << endl;
+    //cout << "Batch Size: " << batchSize << endl
+    //     << "Channel Size: " << chanSize << endl
+    //     << "Input Image Size: " << inputImgSize << endl
+    //     << "Output Image Size: " << outputImgSize << endl;
 
     const int64_t hkW = (kW / 2) * dkW;
     const int64_t hkH = (kH / 2) * dkH;
     
-    cout << "Half Kernel Size: ["
-         << hkW << ", " << hkH << "]" << endl;
+    //cout << "Half Kernel Size: ["
+    //     << hkW << ", " << hkH << "]" << endl;
          
     auto wvTensor = THFloatTensor_new();
+    auto givTensor = THFloatTensor_new();
     auto govTensor = THFloatTensor_new();
     auto govSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
     auto procVTensor = THFloatTensor_new();
 
+    //cout << "Created temporary tensors" << endl;
     
-
-    cout << "Created temporary tensors" << endl;
-    
-    int64_t i, j, k;
+    int64_t i, k;
     for (i = 0; i < batchSize; ++i)
     {
-        cout << "Processing Image: " << i << endl;
+        //cout << "Processing Image: " << i << endl;
 
-        cout << "Creating output grad view" << endl;
+        //cout << "Creating output grad view" << endl;
 
         THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
 
-        cout << "Selected current grad output image" << endl;
+        //cout << "Selected current grad output image" << endl;
 
         THFloatTensor_reshape(govTensor, govTensor, govSize);
 
@@ -287,16 +289,57 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
 
             THFloatTensor_addmm(procVTensor, 0.0f, procVTensor, 1.0f, wvTensor, govTensor);
         }
+        
+        THFloatTensor_select(givTensor, gradInput, 0, i);
+
+        auto giData = THFloatTensor_data(givTensor);
+        const auto unrollData = THFloatTensor_data(opProcMat);
 
         // Ok, so now the proc mat has been filled, so we simply need to copy the respective
         // elements back into the input grad buffer
-        int64_t c = 0;
-        #pragma omp parallel for private(c)
-        for (c = 0; c < nInputPlane; ++c)
+        int64_t iChan = 0;
+        #pragma omp parallel for private(iChan)
+        for (iChan = 0; iChan < nInputPlane; ++iChan)
         {
-            
+            auto giChanData = giData + iChan * chanSize;
+
+            k = 0;
+            for (int64_t kR = -hkH; kR <= hkH; kR += dkH)
+            {
+                for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++k)
+                {
+                    auto rowUnroll = unrollData + iChan * kSize * chanSize + k * chanSize;
+
+                    for (int64_t r = 0; r < height; ++r)
+                    {
+                        int64_t ipR = r + kR;
+
+                        if (ipR >= 0 && ipR < height)
+                        {
+                            for (int64_t c = 0; c < width; ++c)
+                            {
+                                int64_t ipC = c + kC;
+
+                                if (ipC >= 0 && ipC < width)
+                                {
+                                    const float val = rowUnroll[r * width + c];       
+
+                                    giChanData[ipR * width + ipC] += val;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
+
+    // Free the processing tensors
+    THFloatTensor_free(wvTensor);
+    THFloatTensor_free(givTensor);
+    THFloatTensor_free(govTensor);
+    THFloatTensor_free(procVTensor);
+    THLongStorage_free(govSize);
 
     return 1;
 }

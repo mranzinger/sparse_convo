@@ -89,7 +89,28 @@ function SparseFilterConvo:updateGradInput(input, gradOutput)
     assert(self.m_isCuda == self:isCuda(input))
     assert(self.m_isCuda == self:isCuda(gradOutput))
     
+    local vInput
+    if input:dim() == 3 then
+        vInput = input:view(1, input:size(1), input:size(2), input:size(3))
+    elseif input:dim() == 4 then
+        vInput = input
+    else
+        error('Invalid input dimension!')
+    end
+
+    local vGradOutput
+    if gradOutput:dim() == 3 then
+        vGradOutput = gradOutput:view(1, gradOutput:size(1), gradOutput:size(2), gradOutput:size(3))
+    elseif gradOutput:dim() == 4 then
+        vGradOutput = gradOutput
+    else
+        error('Invalid gradient output dimension!')
+    end
+
     self.gradInput:resize(input:size())
+
+    self.opProcMat:resize(self.m_nInputPlanes * self.m_kW * self.m_kH,
+                          vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateGradInput(self, input, gradOutput)

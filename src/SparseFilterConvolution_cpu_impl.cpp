@@ -21,10 +21,10 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 {
     auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
 
-    int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
-    int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
-    int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
-    int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
+    const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
+    const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
+    const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
+    const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
     
     const auto weights = get_mem_tensor(L, "weight");
     const auto bias   = get_mem_tensor(L, "bias");
@@ -187,7 +187,118 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 
 int SparseFilterConvo::UpdateGradInput(lua_State *L)
 {
-    return 0;
+    auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
+    auto gradOutput = (const THFloatTensor*)luaT_checkudata(L, 3, "torch.FloatTensor");
+    
+    const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
+    const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
+    const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
+    const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
+    const int64_t kSize = kW * kH;
+
+    const auto weights = get_mem_tensor(L, "weight");
+    const auto bias = get_mem_tensor(L, "bias");
+    auto gradInput = get_mem_tensor(L, "gradInput"); 
+    auto opProcMat = get_mem_tensor(L, "opProcMat");
+
+    cout << "Update Grad Input:" << endl
+         << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
+         << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
+
+    assert(THFloatTensor_nDimension(opProcMat) == 2);
+
+    cout << "OP Proc Mat: ["
+         << THFloatTensor_size(opProcMat, 0) << " x "
+         << THFloatTensor_size(opProcMat, 1) << "]"
+         << endl;
+
+    luaL_argcheck(L, 
+                  input->nDimension == 4 && gradOutput->nDimension == 4, 
+                  2, "Only a 4D (batch mode) tensor is supported");
+
+    const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
+    const int64_t nInputPlane = luaT_getfieldcheckint(L, 1, "m_nInputPlanes");
+
+    cout << "Input Planes: " << nInputPlane << endl
+         << "Output Planes: " << nOutputPlane << endl;
+
+    const int64_t width = input->size[3];
+    const int64_t height = input->size[2];
+
+    cout << "Width: " << width << endl
+         << "Height: " << height << endl;
+
+    const int64_t batchSize = input->size[0];
+    const int64_t chanSize = width * height;
+    const int64_t inputImgSize = nInputPlane * chanSize;
+    const int64_t outputImgSize = nOutputPlane * chanSize;
+
+    cout << "Batch Size: " << batchSize << endl
+         << "Channel Size: " << chanSize << endl
+         << "Input Image Size: " << inputImgSize << endl
+         << "Output Image Size: " << outputImgSize << endl;
+
+    const int64_t hkW = (kW / 2) * dkW;
+    const int64_t hkH = (kH / 2) * dkH;
+    
+    cout << "Half Kernel Size: ["
+         << hkW << ", " << hkH << "]" << endl;
+         
+    auto wvTensor = THFloatTensor_new();
+    auto govTensor = THFloatTensor_new();
+    auto govSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
+    auto procVTensor = THFloatTensor_new();
+
+    
+
+    cout << "Created temporary tensors" << endl;
+    
+    int64_t i, j, k;
+    for (i = 0; i < batchSize; ++i)
+    {
+        cout << "Processing Image: " << i << endl;
+
+        cout << "Creating output grad view" << endl;
+
+        THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
+
+        cout << "Selected current grad output image" << endl;
+
+        THFloatTensor_reshape(govTensor, govTensor, govSize);
+
+        assert(THFloatTensor_nDimension(govTensor) == 2);
+
+        for (k = 0; k < nInputPlane; ++k)
+        {
+            // Select part of the proc mat for the current input channel
+            THFloatTensor_narrow(procVTensor, opProcMat, 0, kSize * k, kSize);
+
+            // Select the current set of weights
+            THFloatTensor_select(wvTensor, weights, 0, k);
+
+            assert(THFloatTensor_nDimension(wvTensor) == 2);
+
+            // Transpose the weights such that they are:
+            // kSize x nOutputPlane
+            THFloatTensor_transpose(wvTensor, wvTensor, 0, 1);
+
+            assert(THFloatTensor_size(wvTensor, 0) == kSize);
+            assert(THFloatTensor_size(wvTensor, 1) == nOutputPlane);
+
+            THFloatTensor_addmm(procVTensor, 0.0f, procVTensor, 1.0f, wvTensor, govTensor);
+        }
+
+        // Ok, so now the proc mat has been filled, so we simply need to copy the respective
+        // elements back into the input grad buffer
+        int64_t c = 0;
+        #pragma omp parallel for private(c)
+        for (c = 0; c < nInputPlane; ++c)
+        {
+            
+        }
+    }
+
+    return 1;
 }
 
 int SparseFilterConvo::AccGradParameters(lua_State *L)
@@ -197,3 +308,19 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
 
 
 } }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

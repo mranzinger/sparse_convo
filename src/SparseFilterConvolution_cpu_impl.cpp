@@ -346,7 +346,122 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
 
 int SparseFilterConvo::AccGradParameters(lua_State *L)
 {
-    return 0;
+    auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
+    auto gradOutput = (const THFloatTensor*)luaT_checkudata(L, 3, "torch.FloatTensor");
+    float scale = luaL_optnumber(L, 4, 1.f);
+
+    const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
+    const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
+    const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
+    const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
+    
+    const auto gradWeight = get_mem_tensor(L, "gradWeight");
+    const auto gradBias   = get_mem_tensor(L, "gradBias");
+    auto opProcMat = get_mem_tensor(L, "opProcMat");
+
+    //cout << "Update Output:" << endl
+    //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
+    //     << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
+
+    assert(THFloatTensor_nDimension(opProcMat) == 2);
+
+    //cout << "OP Proc Mat: ["
+    //     << THFloatTensor_size(opProcMat, 0) << " x "
+    //     << THFloatTensor_size(opProcMat, 1) << "]"
+    //     << endl;
+
+    luaL_argcheck(L, input->nDimension == 4, 2, "Only a 4D (batch mode) tensor is supported");
+   
+    const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
+    const int64_t nInputPlane = luaT_getfieldcheckint(L, 1, "m_nInputPlanes");
+
+    //cout << "Input Planes: " << nInputPlane << endl
+    //     << "Output Planes: " << nOutputPlane << endl;
+
+    const int64_t width = input->size[3];
+    const int64_t height = input->size[2];
+
+    //cout << "Width: " << width << endl
+    //     << "Height: " << height << endl;
+
+    // NOTE: Padding is assumed, so input sizes equal output sizes,
+    // except for the number of planes
+    const int64_t batchSize = input->size[0];
+    const int64_t chanSize = width * height;
+    const int64_t inputImgSize = nInputPlane * chanSize;
+    const int64_t outputImgSize = nOutputPlane * chanSize;
+
+    auto govTensor = THFloatTensor_new();
+    auto govSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
+    auto wvTensor = THFloatTensor_new();
+    auto transProc = THFloatTensor_new();
+   
+    const auto pInputData = THFloatTensor_data(input);
+    auto pProcData = THFloatTensor_data(opProcMat);
+    
+    for (i = 0; i < batchSize; ++i)
+    {
+        //cout << "Processing Image: " << i << endl;
+
+        const auto pInputImg = pInputData + i * inputImgSize;
+        //auto pOutputImg = pOutputData + i * outputImgSize;
+
+        //cout << "Creating output view" << endl;
+
+        THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
+        THFloatTensor_reshape(govTensor, govTensor, govSize); 
+
+        for (k = 0; k < nInputPlane; ++k)
+        {
+            //cout << "Processing input plane: " << k << endl;
+
+            // Get a matrix view of the weights for the current
+            // input channel
+            THFloatTensor_select(wvTensor, gradWeight, 0, k);
+
+            assert(THFloatTensor_nDimension(wvTensor) == 2);
+
+            const auto pInputChan = pInputImg + k * chanSize;
+
+            int64_t r, c, mR = 0;
+            for (int64_t kR = -hkH; kR <= hkH; kR += dkH)
+            {
+                for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++mR)
+                {
+                    #pragma omp parallel for private(r)
+                    for (r = 0; r < height; ++r)
+                    {
+                        int64_t ipR = r + kR;
+
+                        for (c = 0; c < width; ++c)
+                        {
+                            int64_t mC = r * width + c;
+
+                            int64_t ipC = c + kC;
+
+                            float val = 0.0f;
+                            if (ipR >= 0 and ipC >= 0 and
+                                ipR < height and ipC < width)
+                            {
+                                val = pInputChan[ipR * width + ipC];
+                            }
+
+                            pProcData[mR * chanSize + mC] = val;
+                        }
+                    }
+                }
+            }
+
+            // gradOutput x input'
+            THFloatTensor_transpose(transProc, opProcMat, 0, 1);
+
+            THFloatTensor_addmm(wvTensor, 1.0f, wvTensor, scale, govTensor, transProc);
+        }
+ 
+    }
+    
+    
+    return 1;
 }
 
 

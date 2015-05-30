@@ -29,7 +29,9 @@ function SparseFilterConvo:reset(sdv)
 
     -- Use the Microsoft initialization method
     self.weight = torch.randn(weightSizes):float()
+    self.gradWeight = torch.FloatTensor()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
+    self.gradBias = torch.FloatTensor()
     self.output = torch.FloatTensor()
     self.opProcMat = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()
@@ -41,7 +43,9 @@ function SparseFilterConvo:reset(sdv)
     -- If CUDA, then move the weights to the device
     if self.m_isCuda then
         self.weight = self.weight:cuda()
+        self.gradWeight = self.gradWeight:cuda()
         self.bias = self.bias:cuda()
+        self.gradBias = self.gradBias:cuda()
         self.output = self.output:cuda()
         self.opProcMat = self.opProcMat:cuda()
         self.gradInput = self.gradInput:cuda()
@@ -113,9 +117,9 @@ function SparseFilterConvo:updateGradInput(input, gradOutput)
                           vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
-        input.nn.SparseFilterConvo_cu_updateGradInput(self, input, gradOutput)
+        input.nn.SparseFilterConvo_cu_updateGradInput(self, vInput, vGradOutput)
     else
-        input.nn.SparseFilterConvo_cpu_updateGradInput(self, input, gradOutput)
+        input.nn.SparseFilterConvo_cpu_updateGradInput(self, vInput, vGradOutput)
     end
 
     return self.gradInput
@@ -127,11 +131,34 @@ function SparseFilterConvo:accGradParameters(input, gradOutput, scale)
     assert(self.m_isCuda == self:isCuda(gradOutput))
 
     local scale = scale or 1
-    
-    if self.m_isCuda then
-        input.nn.SparseFilterConvo_cu_accGradParameters(self, input, gradOutput, scale)
+   
+    local vInput
+    if input:dim() == 3 then
+        vInput = input:view(1, input:size(1), input:size(2), input:size(3))
+    elseif input:dim() == 4 then
+        vInput = input
     else
-        input.nn.SparseFilterConvo_cpu_accGradParameters(self, input, gradOutput, scale)
+        error('Invalid input dimension!')
+    end
+
+    local vGradOutput
+    if gradOutput:dim() == 3 then
+        vGradOutput = gradOutput:view(1, gradOutput:size(1), gradOutput:size(2), gradOutput:size(3))
+    elseif gradOutput:dim() == 4 then
+        vGradOutput = gradOutput
+    else
+        error('Invalid gradient output dimension!')
+    end
+ 
+    self.gradWeight:resize(self.weight:size())
+    self.gradBias:resize(self.bias:size())
+
+    self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
+ 
+    if self.m_isCuda then
+        input.nn.SparseFilterConvo_cu_accGradParameters(self, vInput, vGradOutput, scale)
+    else
+        input.nn.SparseFilterConvo_cpu_accGradParameters(self, vInput, vGradOutput, scale)
     end
 
 end

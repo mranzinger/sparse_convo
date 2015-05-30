@@ -389,8 +389,10 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     const int64_t batchSize = input->size[0];
     const int64_t chanSize = width * height;
     const int64_t inputImgSize = nInputPlane * chanSize;
-    const int64_t outputImgSize = nOutputPlane * chanSize;
 
+    const int64_t hkW = (kW / 2) * dkW;
+    const int64_t hkH = (kH / 2) * dkH;
+    
     auto govTensor = THFloatTensor_new();
     auto govSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
     auto wvTensor = THFloatTensor_new();
@@ -399,7 +401,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     const auto pInputData = THFloatTensor_data(input);
     auto pProcData = THFloatTensor_data(opProcMat);
     
-    for (i = 0; i < batchSize; ++i)
+    for (int64_t i = 0; i < batchSize; ++i)
     {
         //cout << "Processing Image: " << i << endl;
 
@@ -411,7 +413,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
         THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
         THFloatTensor_reshape(govTensor, govTensor, govSize); 
 
-        for (k = 0; k < nInputPlane; ++k)
+        for (int64_t k = 0; k < nInputPlane; ++k)
         {
             //cout << "Processing input plane: " << k << endl;
 

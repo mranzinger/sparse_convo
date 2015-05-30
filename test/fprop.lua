@@ -20,7 +20,7 @@ v = torch.FloatTensor{
 
 --v = v:view(2, 2, 4, 4)
 
-fsc = nn.SparseFilterConvo(2, 3, 3, 2, 2)
+fsc = nn.SparseFilterConvo(2, 3, 3, 1, 1)
 
 fsc:prepareSystem(v)
 
@@ -38,25 +38,32 @@ op = fsc:forward(v)
 print('Output:')
 print(op)
 
+fsc:zeroGradParameters()
+
 -- Just use op as the gradient output
 gi = fsc:backward(v, op)
 
 print('Gradient Input:')
 print(gi)
 
-dc = nn.SpatialConvolutionMM(1, 2, 5, 5, 1, 1, 2, 2):float()
+--dc = nn.SpatialConvolutionMM(1, 2, 5, 5, 1, 1, 2, 2):float()
+--
+--dcw = torch.FloatTensor
+--{
+--    1, 0, 1, 0, 1,
+--    0, 0, 0, 0, 0,
+--    1, 0, 1, 0, 1,
+--    0, 0, 0, 0, 0,
+--    1, 0, 1, 0, 1
+--}
+--
+--dc.weight:select(1, 1):copy(dcw)
+--dc.weight:select(1, 2):copy(dcw):mul(-1)
 
-dcw = torch.FloatTensor
-{
-    1, 0, 1, 0, 1,
-    0, 0, 0, 0, 0,
-    1, 0, 1, 0, 1,
-    0, 0, 0, 0, 0,
-    1, 0, 1, 0, 1
-}
+dc = nn.SpatialConvolutionMM(1, 2, 3, 3, 1, 1, 1, 1):float()
 
-dc.weight:select(1, 1):copy(dcw)
-dc.weight:select(1, 2):copy(dcw):mul(-1)
+dc.weight:select(1, 1):fill(1)
+dc.weight:select(1, 2):fill(-1)
 dc.bias:zero()
 
 top = dc:forward(v)
@@ -71,3 +78,15 @@ print(tgi)
 
 assert(torch.all(torch.eq(op, top)), 'The output tensors were not the same')
 assert(torch.all(torch.eq(gi, tgi)), 'The gradient input tensors were not the same')
+
+print('Grad Weight')
+print(fsc.gradWeight)
+
+print('True Grad Weight')
+print(dc.gradWeight)
+
+print('Grad Bias')
+print(fsc.gradBias)
+
+print('True Grad Bias')
+print(dc.gradBias)

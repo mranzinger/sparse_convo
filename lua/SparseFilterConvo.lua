@@ -29,9 +29,9 @@ function SparseFilterConvo:reset(sdv)
 
     -- Use the Microsoft initialization method
     self.weight = torch.randn(weightSizes):float()
-    self.gradWeight = torch.FloatTensor()
+    self.gradWeight = torch.zeros(weightSizes):float()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
-    self.gradBias = torch.FloatTensor()
+    self.gradBias = torch.zeros(self.m_nOutputPlanes):float()
     self.output = torch.FloatTensor()
     self.opProcMat = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()

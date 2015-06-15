@@ -35,16 +35,16 @@ print(fsc.weight)
 
 op = fsc:forward(v)
 
-print('Output:')
-print(op)
+--print('Output:')
+--print(op)
 
 fsc:zeroGradParameters()
 
 -- Just use op as the gradient output
 gi = fsc:backward(v, op)
 
-print('Gradient Input:')
-print(gi)
+--print('Gradient Input:')
+--print(gi)
 
 --dc = nn.SpatialConvolutionMM(1, 2, 5, 5, 1, 1, 2, 2):float()
 --
@@ -68,9 +68,16 @@ dc.bias:zero()
 
 top = dc:forward(v)
 
+print('Output:')
+print(op)
+
 print('True Output:')
 print(top)
 
+print('Gradient Input:')
+print(gi)
+
+dc:zeroGradParameters()
 tgi = dc:backward(v, top)
 
 print('True Gradient Input:')
@@ -85,8 +92,13 @@ print(fsc.gradWeight)
 print('True Grad Weight')
 print(dc.gradWeight)
 
+assert(torch.all(torch.eq(fsc.gradWeight, dc.gradWeight)))
+
 print('Grad Bias')
 print(fsc.gradBias)
 
 print('True Grad Bias')
 print(dc.gradBias)
+
+assert(torch.all(torch.eq(fsc.gradBias, dc.gradBias)))
+

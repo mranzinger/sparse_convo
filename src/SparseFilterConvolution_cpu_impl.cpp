@@ -357,6 +357,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     
     const auto gradWeight = get_mem_tensor(L, "gradWeight");
     const auto gradBias   = get_mem_tensor(L, "gradBias");
+    const auto gradBias2  = get_mem_tensor(L, "gradBias2");
     auto opProcMat = get_mem_tensor(L, "opProcMat");
 
     //cout << "Update Output:" << endl
@@ -413,6 +414,10 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
         THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
         THFloatTensor_reshape(govTensor, govTensor, govSize); 
 
+        // Sum into the bias
+        THFloatTensor_sum(gradBias2, govTensor, 1);
+        THFloatTensor_cadd(gradBias, gradBias, 1, gradBias2);
+
         for (int64_t k = 0; k < nInputPlane; ++k)
         {
             //cout << "Processing input plane: " << k << endl;
@@ -460,8 +465,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
             THFloatTensor_addmm(wvTensor, 1.0f, wvTensor, scale, govTensor, transProc);
         }
  
-    }
-    
+    } 
     
     return 1;
 }

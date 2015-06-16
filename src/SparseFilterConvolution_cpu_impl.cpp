@@ -1,6 +1,8 @@
 #include <iostream>
 #include <assert.h>
 
+#include <omp.h>
+
 #include "luaT.h"
 #include "TH.h"
 #include "THC.h"
@@ -80,7 +82,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     // Initialize the output to the biases
     for (i = 0; i < batchSize; ++i)
     {
-        #pragma omp parallel for private(j)
+        //#pragma omp parallel for private(j)
         for (j = 0; j < nOutputPlane; ++j)
         {
             auto pOutput = pOutputData + i * outputImgSize + j * chanSize;
@@ -148,7 +150,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
             {
                 for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++mR)
                 {
-                    #pragma omp parallel for private(r)
+                    //#pragma omp parallel for private(r)
                     for (r = 0; r < height; ++r)
                     {
                         int64_t ipR = r + kR;
@@ -298,7 +300,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
         // Ok, so now the proc mat has been filled, so we simply need to copy the respective
         // elements back into the input grad buffer
         int64_t iChan = 0;
-        #pragma omp parallel for private(iChan)
+        //#pragma omp parallel for private(iChan)
         for (iChan = 0; iChan < nInputPlane; ++iChan)
         {
             auto giChanData = giData + iChan * chanSize;
@@ -435,7 +437,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
             {
                 for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++mR)
                 {
-                    #pragma omp parallel for private(r)
+                    //#pragma omp parallel for private(r)
                     for (r = 0; r < height; ++r)
                     {
                         int64_t ipR = r + kR;
@@ -466,6 +468,11 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
         }
  
     } 
+   
+    THFloatTensor_free(transProc);
+    THFloatTensor_free(wvTensor);
+    THFloatStorage_free(govSize);
+    THFloatTensor_free(govTensor);
     
     return 1;
 }

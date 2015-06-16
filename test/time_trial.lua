@@ -73,15 +73,17 @@ for i=1,#calcTable do
 
         timer:reset()
 
-        for j = 1, 1 do
+        for j = 1, 3 do
             op = entry[n+1]:forward(input)
 
-            entry[n+1]:zeroGradParameters()
+            --entry[n+1]:zeroGradParameters()
 
-            gi = entry[n+1]:backward(input, op)
+            --gi = entry[n+1]:backward(input, op)
         end
 
         print(timer:time().real .. "s")
+
+        collectgarbage()
     end
 
     print("\n\n")

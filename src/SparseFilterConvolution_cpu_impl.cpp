@@ -118,41 +118,55 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
         }
     }
 
-    for (int64_t outputIdx = 0; outputIdx < nOutputPlane; ++outputIdx)
+    #pragma omp parallel for
+    for (int64_t imageIdx = 0; imageIdx < batchSize; ++imageIdx)
     {
-        for (int64_t sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx)
+        for (int64_t outputIdx = 0; outputIdx < nOutputPlane; ++outputIdx)
         {
-            const int32_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
-            const int32_t xSampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2 + 1];
-
-            // We can compute the ranges where this specific part of the filter is valid
-            const int32_t yStart = max(0, -ySampleOff);
-            const int32_t yEnd = min(height, height - ySampleOff);
-
-            const int32_t xStart = max(0, -xSampleOff);
-            const int32_t xEnd = min(width, width - xSampleOff);
-
-            for (int64_t inPlaneIdx = 0; inPlaneIdx < nInputPlane; ++inPlaneIdx)
+            for (int64_t sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx)
             {
-                for (int64_t y = yStart; y < yEnd; ++y)
+                const int32_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
+                const int32_t xSampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2 + 1];
+
+                // We can compute the ranges where this specific part of the filter is valid
+                const int32_t yStart = max(0, -ySampleOff);
+                const int32_t yEnd = min(height, height - ySampleOff);
+
+                const int32_t xStart = max(0, -xSampleOff);
+                const int32_t xEnd = min(width, width - xSampleOff);
+
+                for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
                 {
-                    int64_t sY = y + ySampleOff;
+                    const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
+                   
+                    const auto pInputPlane = pInputData + imageIdx * inputImgSize + inputIdx * chanSize;
+                    auto pOutputPlane = pOutputData + imageIdx * outputImgSize + outputIdx * chanSize;
 
-                    for (int64_t x = xStart; x < xEnd; ++x)
+                    for (int64_t y = yStart; y < yEnd; ++y)
                     {
-                        int64_t sX = x + xSampleOff;
+                        int64_t sY = y + ySampleOff;
 
-                        for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
+                        const auto pInputRow = pInputPlane + sY * width;
+                        auto pOutputRow = pOutputPlane + y * width;
+
+                        for (int64_t x = xStart; x < xEnd; ++x)
                         {
-                            const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
+                            int64_t sX = x + xSampleOff;
 
-                            for (int64_t imageIdx = 0; imageIdx < batchSize; ++imageIdx)
+                            //for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
                             {
-                                const float inputVal = pInputData[imageIdx * inputImgSize + inputIdx * chanSize + sY * width + sX];
+                                //const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
 
-                                pOutputData[imageIdx * outputImgSize + outputIdx * chanSize + y * width + x] += sampleWeight * inputVal;
-                            }
-                        }                
+                                //const float inputVal = pInputData[imageIdx * inputImgSize + inputIdx * chanSize + sY * width + sX];
+                                //pOutputData[imageIdx * outputImgSize + outputIdx * chanSize + y * width + x] += sampleWeight * inputVal;
+
+                                //const float inputVal = pInputPlane[sY * width + sX];
+                                //pOutputPlane[y * width + x] += sampleWeight * inputVal;
+
+                                const float inputVal = pInputRow[sX];
+                                pOutputRow[x] += sampleWeight * inputVal;
+                            }                
+                        }
                     }
                 }
             }

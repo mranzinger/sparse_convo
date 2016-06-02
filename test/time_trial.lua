@@ -43,7 +43,7 @@ for k = 3,9,2 do
         dk = (k - 1) * s + 1
         table.insert(calcTable, {
             tostring(k) .. "x" .. tostring(k) .. ", stride " .. tostring(s),
-            nn.SparseFilterConvo(32, k, k, s, s),
+            nn.SparseFilterConvo.gridInit(32, k, k, s, s),
             init_full(nn.SpatialConvolutionMM(inputChans, 32, dk, dk, 1, 1, s, s):float(), dk, dk, s)
         }) 
 

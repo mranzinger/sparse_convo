@@ -93,11 +93,11 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     //     << "Input Image Size: " << inputImgSize << endl
     //     << "Output Image Size: " << outputImgSize << endl;
 
-    auto pOutputData = THFloatTensor_data(output);
-    const auto pInputData = THFloatTensor_data(input);
-    const auto pWeightData = THFloatTensor_data(weights);
-    const auto pBiasData = THFloatTensor_data(bias);
-    const auto pOffsetData = THIntTensor_data(sampleOffsets);
+    float * pOutputData = THFloatTensor_data(output);
+    const float * pInputData = THFloatTensor_data(input);
+    const float * pWeightData = THFloatTensor_data(weights);
+    const float * pBiasData = THFloatTensor_data(bias);
+    const int * pOffsetData = THIntTensor_data(sampleOffsets);
     //auto pProcData = THFloatTensor_data(opProcMat);
 
     int64_t i,j,k;
@@ -139,33 +139,22 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
                 {
                     const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
                    
-                    const auto pInputPlane = pInputData + imageIdx * inputImgSize + inputIdx * chanSize;
-                    auto pOutputPlane = pOutputData + imageIdx * outputImgSize + outputIdx * chanSize;
+                    const float * pInputPlane = pInputData + imageIdx * inputImgSize + inputIdx * chanSize;
+                    float * pOutputPlane = pOutputData + imageIdx * outputImgSize + outputIdx * chanSize;
 
                     for (int64_t y = yStart; y < yEnd; ++y)
                     {
-                        int64_t sY = y + ySampleOff;
+                        const int64_t sY = y + ySampleOff;
 
-                        const auto pInputRow = pInputPlane + sY * width;
-                        auto pOutputRow = pOutputPlane + y * width;
+                        const float * pInputRow = pInputPlane + sY * width;
+                        float * pOutputRow = pOutputPlane + y * width;
 
                         for (int64_t x = xStart; x < xEnd; ++x)
                         {
-                            int64_t sX = x + xSampleOff;
+                            const int64_t sX = x + xSampleOff;
 
-                            //for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
-                            {
-                                //const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
-
-                                //const float inputVal = pInputData[imageIdx * inputImgSize + inputIdx * chanSize + sY * width + sX];
-                                //pOutputData[imageIdx * outputImgSize + outputIdx * chanSize + y * width + x] += sampleWeight * inputVal;
-
-                                //const float inputVal = pInputPlane[sY * width + sX];
-                                //pOutputPlane[y * width + x] += sampleWeight * inputVal;
-
-                                const float inputVal = pInputRow[sX];
-                                pOutputRow[x] += sampleWeight * inputVal;
-                            }                
+                            const float inputVal = pInputRow[sX];
+                            pOutputRow[x] += sampleWeight * inputVal;
                         }
                     }
                 }

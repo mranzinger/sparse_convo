@@ -73,7 +73,7 @@ for i=1,#calcTable do
 
         timer:reset()
 
-        for j = 1, 3 do
+        for j = 1, 10 do
             op = entry[n+1]:forward(input)
 
             --entry[n+1]:zeroGradParameters()

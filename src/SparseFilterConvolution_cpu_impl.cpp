@@ -98,7 +98,6 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     const float * pWeightData = THFloatTensor_data(weights);
     const float * pBiasData = THFloatTensor_data(bias);
     const int * pOffsetData = THIntTensor_data(sampleOffsets);
-    //auto pProcData = THFloatTensor_data(opProcMat);
 
     int64_t i,j,k;
 
@@ -107,7 +106,6 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     // Initialize the output to the biases
     for (i = 0; i < batchSize; ++i)
     {
-        //#pragma omp parallel for private(j)
         for (j = 0; j < nOutputPlane; ++j)
         {
             auto pOutput = pOutputData + i * outputImgSize + j * chanSize;
@@ -161,99 +159,6 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
             }
         }
     }
-
-    //const int64_t hkW = (kW / 2) * dkW;
-    //const int64_t hkH = (kH / 2) * dkH;
-
-    //cout << "Half Kernel Size: ["
-    //     << hkW << ", " << hkH << "]" << endl;
-
-    /*auto wvTensor = THFloatTensor_new();
-    auto ovTensor = THFloatTensor_new();
-    auto ovSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
-
-    //cout << "Created temporary tensors" << endl;
-
-    for (i = 0; i < batchSize; ++i)
-    {
-        //cout << "Processing Image: " << i << endl;
-
-        const auto pInputImg = pInputData + i * inputImgSize;
-        //auto pOutputImg = pOutputData + i * outputImgSize;
-
-        //cout << "Creating output view" << endl;
-
-        // Create a matrix view of the current output buffer
-        THFloatTensor_select(ovTensor, output, 0, i);
-
-        //cout << "Selected current output image" << endl;
-
-        THFloatTensor_reshape(ovTensor, ovTensor, ovSize);
-
-        assert(THFloatTensor_nDimension(ovTensor) == 2);
-
-        //cout << "Output view: ["
-        //     << THFloatTensor_size(ovTensor, 0) << " x "
-        //     << THFloatTensor_size(ovTensor, 1) << "]"
-        //     << endl;
-
-        for (k = 0; k < nInputPlane; ++k)
-        {
-            //cout << "Processing input plane: " << k << endl;
-
-            // Get a matrix view of the weights for the current
-            // input channel
-            THFloatTensor_select(wvTensor, weights, 0, k);
-
-            assert(THFloatTensor_nDimension(wvTensor) == 2);
-
-
-            //cout << "Weight view: ["
-            //     << THFloatTensor_size(wvTensor, 0) << " x "
-            //     << THFloatTensor_size(wvTensor, 1) << "]"
-            //     << endl;
-
-            const auto pInputChan = pInputImg + k * chanSize;
-
-            int64_t r, c, mR = 0;
-            //for (int64_t kR = -hkH; kR <= hkH; kR += dkH)
-            //{
-                //for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++mR)
-                //{
-                    //#pragma omp parallel for private(r)
-                    for (r = 0; r < height; ++r)
-                    {
-                        int64_t ipR = r + kR;
-
-                        for (c = 0; c < width; ++c)
-                        {
-                            int64_t mC = r * width + c;
-
-                            int64_t ipC = c + kC;
-
-                            float val = 0.0f;
-                            if (ipR >= 0 and ipC >= 0 and
-                                ipR < height and ipC < width)
-                            {
-                                val = pInputChan[ipR * width + ipC];
-                            }
-
-                            pProcData[mR * chanSize + mC] = val;
-                        }
-                    }
-                //}
-            //}
-
-            //Now that the matrix is filled out, do the multiply and accumulate into
-            // the ovTensor view
-            THFloatTensor_addmm(ovTensor, 1.0f, ovTensor, 1.0f, wvTensor, opProcMat);
-        }
-    }
-
-    // Free the processing buffers
-    THFloatTensor_free(wvTensor);
-    THFloatTensor_free(ovTensor);
-    THLongStorage_free(ovSize);*/
 
     return 0;
 }

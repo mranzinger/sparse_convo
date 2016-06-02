@@ -79,10 +79,8 @@ function SparseFilterConvo:reset(sdv)
         return
     end
     
-    -- Input planes are the outer dimension so that we can stream in
-    -- planes and accumulate partial convolutions into the output buffer
-    local weightSizes = torch.LongStorage{self.m_nInputPlanes,
-                                          self.m_nOutputPlanes,
+    local weightSizes = torch.LongStorage{self.m_nOutputPlanes,
+                                          self.m_nInputPlanes,
                                           self.m_numSamples}
 
     -- Use the Microsoft initialization method

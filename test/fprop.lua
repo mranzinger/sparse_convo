@@ -20,24 +20,26 @@ v = torch.FloatTensor{
 
 --v = v:view(2, 2, 4, 4)
 
---fsc = nn.SparseFilterConvo(2, 3, 3, 1, 1)
-fsc = nn.SparseFilterConvo({ { 3, 2 } }, 9)
+fsc = nn.SparseFilterConvo.gridInit(2, 3, 3, 1, 1)
+--fsc = nn.SparseFilterConvo({ { 3, 2 } }, 9)
 dc = nn.SpatialConvolutionMM(1, 2, 3, 3, 1, 1, 1, 1):float()
 
 fsc:prepareSystem(v)
 
-local i = 1
-for k=1,2 do
-    for y=-1, 1 do
-        for x=-1, 1 do
-            fsc.sampleOffsets[k][i][1] = y
-            fsc.sampleOffsets[k][i][2] = x
-        end
-    end
-end
+--for k=1,2 do
+--    local i = 1
+--    for y=-1, 1 do
+--        for x=-1, 1 do
+--            fsc.sampleOffsets[k][i][1] = y
+--            fsc.sampleOffsets[k][i][2] = x
+--            i = i + 1
+--        end
+--    end
+--end
 
-fsc.weight:select(2, 1):fill(1)
-fsc.weight:select(2, 2):fill(-1)
+fsc.weight:select(1, 1):fill(1)
+fsc.weight:select(1, 2):fill(-1)
+fsc.bias:zero()
 
 dc.weight:select(1, 1):fill(1)
 dc.weight:select(1, 2):fill(-1)
@@ -48,6 +50,9 @@ print(v)
 
 print('Weights:')
 print(fsc.weight)
+
+print('Offsets:')
+print(fsc.sampleOffsets)
 
 op = fsc:forward(v)
 

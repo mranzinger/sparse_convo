@@ -73,6 +73,29 @@ function SparseFilterConvo:__init(scales, numSamples)
     end
 end
 
+function SparseFilterConvo.gridInit(nOutputPlanes, kH, kW, sH, sW)
+
+    local numSamples = kH * kW
+    local ret = nn.SparseFilterConvo({ { numSamples, nOutputPlanes } }, numSamples)
+
+    local hkH = (kH - 1) / 2
+    local hkW = (kW - 1) / 2
+
+    for k=1, nOutputPlanes do
+        local i = 1
+        for y=-hkH, hkH do
+            for x=-hkW, hkW do
+                ret.sampleOffsets[k][i][1] = y * sH
+                ret.sampleOffsets[k][i][2] = x * sW
+                i = i + 1
+            end
+        end
+    end
+
+    return ret
+
+end
+
 function SparseFilterConvo:reset(sdv)
     
     if not self.m_isPrepared then
@@ -135,7 +158,7 @@ function SparseFilterConvo:updateOutput(input)
     -- P: unrolled input matrix
     --      each row is the kernel about x,y
     --      each column is an x,y pixel
-    self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
+    --self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateOutput(self, vInput)

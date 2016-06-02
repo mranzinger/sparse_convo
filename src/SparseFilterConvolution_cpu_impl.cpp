@@ -12,10 +12,28 @@ using namespace std;
 
 namespace sparse_convo { namespace cpu {
 
-inline THFloatTensor *get_mem_tensor(lua_State *L, const char *a_name, int a_idx = 1)
+template<typename T>
+struct tensor_trait;
+
+template<>
+struct tensor_trait<float>
 {
-    return static_cast<THFloatTensor*>(
-        luaT_getfieldcheckudata(L, a_idx, a_name, "torch.FloatTensor")
+    static const char name[] = "torch.FloatTensor";
+    typedef THFloatTensor *th_type;
+};
+
+template<>
+struct tensor_trait<int>
+{
+    static const char name[] = "torch.IntTensor";
+    typedef THIntTensor *th_type;
+};
+
+template<typename T>
+inline typename tensor_trait<T>::th_type get_mem_tensor(lua_State *L, const char *a_name, int a_idx = 1)
+{
+    return static_cast<typename tensor_trait<T>::th_type>(
+        luaT_getfieldcheckudata(L, a_idx, a_name, tensor_trait<T>::name)
     );
 }
 
@@ -23,10 +41,10 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 {
     auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
 
-    const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
-    const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
-    const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
-    const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
+    //const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
+    //const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
+    //const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
+    //const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
     
     const auto weights = get_mem_tensor(L, "weight");
     const auto bias   = get_mem_tensor(L, "bias");
@@ -471,7 +489,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
    
     THFloatTensor_free(transProc);
     THFloatTensor_free(wvTensor);
-    THFloatStorage_free(govSize);
+    THLongStorage_free(govSize);
     THFloatTensor_free(govTensor);
     
     return 1;

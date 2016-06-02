@@ -1,18 +1,76 @@
 require 'cutorch'
+local mk = require 'multikey'
 
 local SparseFilterConvo, parent = torch.class('nn.SparseFilterConvo',
                                               'nn.Module')
 
-function SparseFilterConvo:__init(nOutputPlanes,
-                                  kW, kH,
-                                  dkW, dkH)
+local roundf = function(x)
+    if x < 0 then
+        return math.ceil(x - 0.5)
+    else
+        return math.floor(x + 0.5)
+    end
+end
+
+function SparseFilterConvo:__init(scales, numSamples)
     --Assumes stride of 1 and sufficient padding to preserve input
     --width and height
+
+    local nOutputPlanes = 0
+    for _, scale in ipairs(scales) do
+        local targetSize, numFilters = unpack(scale)
+
+        nOutputPlanes = nOutputPlanes + numFilters
+    end
+
     self.m_nOutputPlanes = nOutputPlanes
-    self.m_kW = kW
-    self.m_kH = kH
-    self.m_dkW = dkW or 2
-    self.m_dkH = dkH or 2
+    self.m_numSamples = numSamples
+
+    self.sampleOffsets = torch.IntTensor(nOutputPlanes, numSamples, 2)
+
+    local cOff = 0
+    for _, scale in ipairs(scales) do
+        local targetSize, numFilters = unpack(scale)
+        assert(numSamples <= targetSize * targetSize, 'Invalid number of samples. Must be less than or equal to the target size squared')
+        targetSize = targetSize / 2
+
+        for i=1, numFilters do
+            local fTable = { }
+            local fList = { }
+            while #fList < numSamples do
+                -- The result is that 50% of the samples will be within
+                -- the target size. This is a reasonable sparsity goal
+                local x = roundf(torch.normal(0, 1.349 * targetSize))
+                local y = roundf(torch.normal(0, 1.349 * targetSize))
+
+                if not mk.get(fTable, x, y) then
+                    mk.put(fTable, x, y, true)
+                    table.insert(fList, { y, x })
+                end
+            end
+
+            -- Sort the samples by Y and then by X
+            table.sort(fList,
+                function(p1, p2)
+                    if p1[1] < p2[1] then
+                        return true
+                    elseif p2[1] < p1[1] then
+                        return false
+                    end
+
+                    return p1[2] < p2[2]
+                end
+            )
+
+            local ct = self.sampleOffsets[cOff + i]
+            for i, pt in ipairs(fList) do
+                ct[i][1] = pt[1]
+                ct[i][2] = pt[2]
+            end
+        end
+
+        cOff = cOff + numFilters
+    end
 end
 
 function SparseFilterConvo:reset(sdv)
@@ -25,7 +83,7 @@ function SparseFilterConvo:reset(sdv)
     -- planes and accumulate partial convolutions into the output buffer
     local weightSizes = torch.LongStorage{self.m_nInputPlanes,
                                           self.m_nOutputPlanes,
-                                          self.m_kH * self.m_kW}
+                                          self.m_numSamples}
 
     -- Use the Microsoft initialization method
     self.weight = torch.randn(weightSizes):float()
@@ -37,7 +95,7 @@ function SparseFilterConvo:reset(sdv)
     self.opProcMat = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()
 
-    local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_kH * self.m_kW))
+    local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_numSamples))
 
     self.weight:mul(sdv)
 
@@ -51,6 +109,7 @@ function SparseFilterConvo:reset(sdv)
         self.output = self.output:cuda()
         self.opProcMat = self.opProcMat:cuda()
         self.gradInput = self.gradInput:cuda()
+        self.sampleOffsets = self.sampleOffsets:cuda()
     end
 
 end

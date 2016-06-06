@@ -50,17 +50,6 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     auto output = get_mem_tensor<float>(L, "output");
     auto sampleOffsets = get_mem_tensor<int>(L, "sampleOffsets");
 
-    //cout << "Update Output:" << endl
-    //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
-    //     << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
-
-    //assert(THFloatTensor_nDimension(opProcMat) == 2);
-
-    //cout << "OP Proc Mat: ["
-    //     << THFloatTensor_size(opProcMat, 0) << " x "
-    //     << THFloatTensor_size(opProcMat, 1) << "]"
-    //     << endl;
-
     luaL_argcheck(L, input->nDimension == 4, 2, "Only a 4D (batch mode) tensor is supported");
    
     const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
@@ -164,9 +153,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
     auto gradOutput = (const THFloatTensor*)luaT_checkudata(L, 3, "torch.FloatTensor");
     
     const auto weights = get_mem_tensor<float>(L, "weight");
-    //const auto bias = get_mem_tensor<float>(L, "bias");
     auto gradInput = get_mem_tensor<float>(L, "gradInput"); 
-    //auto opProcMat = get_mem_tensor<float>(L, "opProcMat");
     auto sampleOffsets = get_mem_tensor<int>(L, "sampleOffsets");
 
     luaL_argcheck(L, 
@@ -195,13 +182,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
     //     << "Channel Size: " << chanSize << endl
     //     << "Input Image Size: " << inputImgSize << endl
     //     << "Output Image Size: " << outputImgSize << endl;
-
-    //const int64_t hkW = (kW / 2) * dkW;
-    //const int64_t hkH = (kH / 2) * dkH;
-    
-    //cout << "Half Kernel Size: ["
-    //     << hkW << ", " << hkH << "]" << endl;
-    
+   
     const float *pGradOutputData = THFloatTensor_data(gradOutput);
     float *pGradInputData = THFloatTensor_data(gradInput);
     const float *pWeightData = THFloatTensor_data(weights);
@@ -293,12 +274,6 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     //     << "Input Image Size: " << inputImgSize << endl
     //     << "Output Image Size: " << outputImgSize << endl;
 
-    //const int64_t hkW = (kW / 2) * dkW;
-    //const int64_t hkH = (kH / 2) * dkH;
-    
-    //cout << "Half Kernel Size: ["
-    //     << hkW << ", " << hkH << "]" << endl;
-   
     const float *pInputData = THFloatTensor_data(input); 
     const float *pGradOutputData = THFloatTensor_data(gradOutput);
     const int *pOffsetData = THIntTensor_data(sampleOffsets);

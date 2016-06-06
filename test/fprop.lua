@@ -1,4 +1,5 @@
 require 'sparseconvo'
+require 'test_util'
 
 v = torch.FloatTensor{
 
@@ -95,4 +96,32 @@ print('True Grad Bias')
 print(dc.gradBias)
 
 assert(torch.all(torch.eq(fsc.gradBias, dc.gradBias)))
+
+print('Doing a hard test now!')
+local hardInput = torch.randn(4, 4, 32, 32):float():mul(10):ceil()
+
+fsc = nn.SparseFilterConvo.gridInit(8, 3, 3, 2, 2)
+dc = nn.SpatialConvolutionMM(4, 8, 5, 5, 1, 1, 2, 2):float()
+
+fsc:prepareSystem(hardInput)
+
+fsc.weight:fill(1)
+dc.weight:fill(1)
+
+init_full(dc, 4, 5, 5, 2)
+
+op = fsc:forward(hardInput)
+top = dc:forward(hardInput)
+
+assert(torch.all(torch.eq(op, top)), 'The output tensors were not the same')
+
+fsc:zeroGradParameters()
+dc:zeroGradParameters()
+
+gi = fsc:backward(hardInput, op)
+tgi = dc:backward(hardInput, op)
+
+assert(torch.all(torch.eq(gi, tgi)), 'The gradient input tensors were not the same')
+
+--TODO: Test gradWeight and gradBias
 

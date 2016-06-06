@@ -1,32 +1,9 @@
 require 'sparseconvo'
+require 'test_util'
 
 print("Starting Tests!")
 
 local inputChans = 3
-
-function init_full(a_layer, h, w, stride)
-
-    local t = torch.FloatTensor(inputChans, h, w)
-    t:zero()
-
-    for r = 1,h,stride do
-        for c = 1,w,stride do
-            t[{{},r,c}] = 1
-        end
-    end
-    
-    print(t:size())
-    print(a_layer.weight:size())
-    --t:reshape(h * w)
-
-    for i=1,a_layer.weight:size(1) do
-        a_layer.weight:select(1, i):cmul(t)
-    end
-
-    a_layer.bias:zero()
-
-    return a_layer
-end
 
 print("Creating large input")
 
@@ -44,7 +21,7 @@ for k = 3,9,2 do
         table.insert(calcTable, {
             tostring(k) .. "x" .. tostring(k) .. ", stride " .. tostring(s),
             nn.SparseFilterConvo.gridInit(32, k, k, s, s),
-            init_full(nn.SpatialConvolutionMM(inputChans, 32, dk, dk, 1, 1, s, s):float(), dk, dk, s)
+            init_full(nn.SpatialConvolutionMM(inputChans, 32, dk, dk, 1, 1, s, s):float(), inputChans, dk, dk, s)
         }) 
 
     end

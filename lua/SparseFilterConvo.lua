@@ -111,9 +111,7 @@ function SparseFilterConvo:reset(sdv)
     self.gradWeight = torch.zeros(weightSizes):float()
     self.bias = torch.zeros(self.m_nOutputPlanes):float()
     self.gradBias = torch.zeros(self.m_nOutputPlanes):float()
-    self.gradBias2 = self.gradBias:clone()
     self.output = torch.FloatTensor()
-    self.opProcMat = torch.FloatTensor()
     self.gradInput = torch.FloatTensor()
 
     local sdv = sdv or math.sqrt(2.0 / (self.m_nInputPlanes * self.m_numSamples))
@@ -126,9 +124,7 @@ function SparseFilterConvo:reset(sdv)
         self.gradWeight = self.gradWeight:cuda()
         self.bias = self.bias:cuda()
         self.gradBias = self.gradBias:cuda()
-        self.gradBias2 = self.gradBias2:cuda()
         self.output = self.output:cuda()
-        self.opProcMat = self.opProcMat:cuda()
         self.gradInput = self.gradInput:cuda()
         self.sampleOffsets = self.sampleOffsets:cuda()
     end
@@ -152,13 +148,6 @@ function SparseFilterConvo:updateOutput(input)
                        self.m_nOutputPlanes,
                        vInput:size(3),
                        vInput:size(4))
-
-    -- op += w_i * P
-    -- w_i: input channel weights
-    -- P: unrolled input matrix
-    --      each row is the kernel about x,y
-    --      each column is an x,y pixel
-    --self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateOutput(self, vInput)
@@ -194,9 +183,6 @@ function SparseFilterConvo:updateGradInput(input, gradOutput)
     end
 
     self.gradInput:resize(input:size())
-
-    --self.opProcMat:resize(self.m_nInputPlanes * self.m_kW * self.m_kH,
-    --                      vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateGradInput(self, vInput, vGradOutput)
@@ -235,8 +221,6 @@ function SparseFilterConvo:accGradParameters(input, gradOutput, scale)
     self.gradWeight:resize(self.weight:size())
     self.gradBias:resize(self.bias:size())
 
-    self.opProcMat:resize(self.m_kW * self.m_kH, vInput:size(3) * vInput:size(4))
- 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_accGradParameters(self, vInput, vGradOutput, scale)
     else

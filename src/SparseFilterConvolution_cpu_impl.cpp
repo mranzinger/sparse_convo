@@ -319,6 +319,7 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     THFloatTensor_sum(gradBias, compGradBias, 2); // batchSize x nOutputPlane x 1
     THFloatTensor_sum(compGradBias, gradBias, 0); // 1 x nOutputPlane x 1
     THFloatTensor_squeeze(gradBias, compGradBias); // nOutputPlane
+    THFloatTensor_mul(gradBias, gradBias, scale); // Apply the scale
     THLongStorage_free(goSize);
     THFloatTensor_free(compGradBias);
 

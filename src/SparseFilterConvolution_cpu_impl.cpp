@@ -303,19 +303,31 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
     const float *pGradOutputData = THFloatTensor_data(gradOutput);
     const int *pOffsetData = THIntTensor_data(sampleOffsets);
     float *pGradWeightData = THFloatTensor_data(gradWeight);
-    float *pGradBiasData = THFloatTensor_data(gradBias);
 
     // Zero it out so that we can accumulate into the buffer
     THFloatTensor_zero(gradWeight);
-    THFloatTensor_zero(gradBias);
 
+    // The gradient for the bias is simply the sum of the output errors over each output dimension
+    // NOTE: This is technically incorrect, since there is no guarantee that a filter is applied to 
+    // a given point, since the filter doesn't necessarily have a weight for the center position.
+    // This could technically be remedied by computing a mask of filter idx to output position,
+    // but this adds a lot of complexity to a very marginal boundary condition
+    //THFloatTensor_zero(gradBias);
+    auto compGradBias = THFloatTensor_new();
+    auto goSize = THLongStorage_newWithSize3(batchSize, nOutputPlane, chanSize);
+    THFloatTensor_reshape(compGradBias, const_cast<THFloatTensor*>(gradOutput), goSize);
+    THFloatTensor_sum(gradBias, compGradBias, 2); // batchSize x nOutputPlane x 1
+    THFloatTensor_sum(compGradBias, gradBias, 0); // 1 x nOutputPlane x 1
+    THFloatTensor_squeeze(gradBias, compGradBias); // nOutputPlane
+    THLongStorage_free(goSize);
+    THFloatTensor_free(compGradBias);
+
+    // NOTE: The output and image loops have been reversed to prevent race conditions
     #pragma omp parallel for
-    for (int64_t imageIdx = 0; imageIdx < batchSize; ++imageIdx)
+    for (int64_t outputIdx = 0; outputIdx < nOutputPlane; ++outputIdx)
     {
-        for (int64_t outputIdx = 0; outputIdx < nOutputPlane; ++outputIdx)
+        for (int64_t imageIdx = 0; imageIdx < batchSize; ++imageIdx)
         {
-            float &biasGradWeight = pGradBiasData[outputIdx];
-
             for (int64_t sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx)
             {
                 const int64_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
@@ -349,7 +361,6 @@ int SparseFilterConvo::AccGradParameters(lua_State *L)
                             const float gradOutputVal = pGradOutputRow[x];
 
                             sampleGradWeight += scale * inputVal * gradOutputVal;
-                            biasGradWeight += scale * gradOutputVal;
                         }
                     }
                 }

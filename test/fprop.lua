@@ -80,9 +80,6 @@ print(tgi)
 
 assert(torch.all(torch.eq(gi, tgi)), 'The gradient input tensors were not the same')
 
-print('TODO: Implement the backward convolutions')
-os.exit(0)
-
 print('Grad Weight')
 print(fsc.gradWeight)
 

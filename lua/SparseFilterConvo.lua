@@ -195,8 +195,8 @@ function SparseFilterConvo:updateGradInput(input, gradOutput)
 
     self.gradInput:resize(input:size())
 
-    self.opProcMat:resize(self.m_nInputPlanes * self.m_kW * self.m_kH,
-                          vInput:size(3) * vInput:size(4))
+    --self.opProcMat:resize(self.m_nInputPlanes * self.m_kW * self.m_kH,
+    --                      vInput:size(3) * vInput:size(4))
 
     if self.m_isCuda then
         input.nn.SparseFilterConvo_cu_updateGradInput(self, vInput, vGradOutput)

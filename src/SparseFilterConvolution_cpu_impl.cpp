@@ -1,5 +1,6 @@
 #include <iostream>
 #include <assert.h>
+#include <sstream>
 
 #include <omp.h>
 
@@ -43,15 +44,9 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
 {
     auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
 
-    //const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
-    //const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
-    //const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
-    //const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
-    
     // Filter x Input Plane x Num Samples
     const auto weights = get_mem_tensor<float>(L, "weight");
     const auto bias   = get_mem_tensor<float>(L, "bias");
-    //auto opProcMat = get_mem_tensor<float>(L, "opProcMat");
     auto output = get_mem_tensor<float>(L, "output");
     auto sampleOffsets = get_mem_tensor<int>(L, "sampleOffsets");
 
@@ -59,7 +54,7 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
     //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
     //     << "\tKernel Stride: [" << dkW << " x " << dkH << "]" << endl;
 
-    assert(THFloatTensor_nDimension(opProcMat) == 2);
+    //assert(THFloatTensor_nDimension(opProcMat) == 2);
 
     //cout << "OP Proc Mat: ["
     //     << THFloatTensor_size(opProcMat, 0) << " x "
@@ -123,15 +118,15 @@ int SparseFilterConvo::UpdateOutput(lua_State *L)
         {
             for (int64_t sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx)
             {
-                const int32_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
-                const int32_t xSampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2 + 1];
+                const int64_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
+                const int64_t xSampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2 + 1];
 
                 // We can compute the ranges where this specific part of the filter is valid
-                const int32_t yStart = max(0, -ySampleOff);
-                const int32_t yEnd = min(height, height - ySampleOff);
+                const int64_t yStart = max<int64_t>(0, -ySampleOff);
+                const int64_t yEnd = min(height, height - ySampleOff);
 
-                const int32_t xStart = max(0, -xSampleOff);
-                const int32_t xEnd = min(width, width - xSampleOff);
+                const int64_t xStart = max<int64_t>(0, -xSampleOff);
+                const int64_t xEnd = min(width, width - xSampleOff);
 
                 for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
                 {
@@ -168,16 +163,18 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
     auto input = (const THFloatTensor*)luaT_checkudata(L, 2, "torch.FloatTensor");
     auto gradOutput = (const THFloatTensor*)luaT_checkudata(L, 3, "torch.FloatTensor");
     
-    const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
+    /*const int64_t kW = luaT_getfieldcheckint(L, 1, "m_kW");
     const int64_t kH = luaT_getfieldcheckint(L, 1, "m_kH");
     const int64_t dkW = luaT_getfieldcheckint(L, 1, "m_dkW");
     const int64_t dkH = luaT_getfieldcheckint(L, 1, "m_dkH");
-    const int64_t kSize = kW * kH;
+    const int64_t kSize = kW * kH;*/
 
     const auto weights = get_mem_tensor<float>(L, "weight");
-    const auto bias = get_mem_tensor<float>(L, "bias");
+    //const auto bias = get_mem_tensor<float>(L, "bias");
     auto gradInput = get_mem_tensor<float>(L, "gradInput"); 
-    auto opProcMat = get_mem_tensor<float>(L, "opProcMat");
+    //auto opProcMat = get_mem_tensor<float>(L, "opProcMat");
+    auto sampleOffsets = get_mem_tensor<int>(L, "sampleOffsets");
+
 
     //cout << "Update Grad Input:" << endl
     //     << "\tKernel Size: [" << kW << " x " << kH << "]" << endl
@@ -185,7 +182,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
 
     THFloatTensor_zero(gradInput);
 
-    assert(THFloatTensor_nDimension(opProcMat) == 2);
+    //assert(THFloatTensor_nDimension(opProcMat) == 2);
 
     //cout << "OP Proc Mat: ["
     //     << THFloatTensor_size(opProcMat, 0) << " x "
@@ -198,6 +195,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
 
     const int64_t nOutputPlane = luaT_getfieldcheckint(L, 1, "m_nOutputPlanes");
     const int64_t nInputPlane = luaT_getfieldcheckint(L, 1, "m_nInputPlanes");
+    const int64_t nSamples = luaT_getfieldcheckint(L, 1, "m_numSamples");
 
     //cout << "Input Planes: " << nInputPlane << endl
     //     << "Output Planes: " << nOutputPlane << endl;
@@ -210,100 +208,64 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
 
     const int64_t batchSize = input->size[0];
     const int64_t chanSize = width * height;
-    //const int64_t inputImgSize = nInputPlane * chanSize;
-    //const int64_t outputImgSize = nOutputPlane * chanSize;
+    const int64_t inputImgSize = nInputPlane * chanSize;
+    const int64_t outputImgSize = nOutputPlane * chanSize;
 
     //cout << "Batch Size: " << batchSize << endl
     //     << "Channel Size: " << chanSize << endl
     //     << "Input Image Size: " << inputImgSize << endl
     //     << "Output Image Size: " << outputImgSize << endl;
 
-    const int64_t hkW = (kW / 2) * dkW;
-    const int64_t hkH = (kH / 2) * dkH;
+    //const int64_t hkW = (kW / 2) * dkW;
+    //const int64_t hkH = (kH / 2) * dkH;
     
     //cout << "Half Kernel Size: ["
     //     << hkW << ", " << hkH << "]" << endl;
-         
-    auto wvTensor = THFloatTensor_new();
-    auto givTensor = THFloatTensor_new();
-    auto govTensor = THFloatTensor_new();
-    auto govSize = THLongStorage_newWithSize2(nOutputPlane, chanSize);
-    auto procVTensor = THFloatTensor_new();
-
-    //cout << "Created temporary tensors" << endl;
     
-    int64_t i, k;
-    for (i = 0; i < batchSize; ++i)
+    const float *pGradOutputData = THFloatTensor_data(gradOutput);
+    float *pGradInputData = THFloatTensor_data(gradInput);
+    const float *pWeightData = THFloatTensor_data(weights);
+    const int *pOffsetData = THIntTensor_data(sampleOffsets);
+
+    // Zero it out so that we can accumulate into the buffer
+    THFloatTensor_zero(gradInput);
+
+    #pragma omp parallel for
+    for (int64_t imageIdx = 0; imageIdx < batchSize; ++imageIdx)
     {
-        //cout << "Processing Image: " << i << endl;
-
-        //cout << "Creating output grad view" << endl;
-
-        THFloatTensor_select(govTensor, (THFloatTensor*)gradOutput, 0, i);
-
-        //cout << "Selected current grad output image" << endl;
-
-        THFloatTensor_reshape(govTensor, govTensor, govSize);
-
-        assert(THFloatTensor_nDimension(govTensor) == 2);
-
-        for (k = 0; k < nInputPlane; ++k)
+        for (int64_t outputIdx = 0; outputIdx < nOutputPlane; ++outputIdx)
         {
-            // Select part of the proc mat for the current input channel
-            THFloatTensor_narrow(procVTensor, opProcMat, 0, kSize * k, kSize);
-
-            // Select the current set of weights
-            THFloatTensor_select(wvTensor, weights, 0, k);
-
-            assert(THFloatTensor_nDimension(wvTensor) == 2);
-
-            // Transpose the weights such that they are:
-            // kSize x nOutputPlane
-            THFloatTensor_transpose(wvTensor, wvTensor, 0, 1);
-
-            assert(THFloatTensor_size(wvTensor, 0) == kSize);
-            assert(THFloatTensor_size(wvTensor, 1) == nOutputPlane);
-
-            THFloatTensor_addmm(procVTensor, 0.0f, procVTensor, 1.0f, wvTensor, govTensor);
-        }
-        
-        THFloatTensor_select(givTensor, gradInput, 0, i);
-
-        auto giData = THFloatTensor_data(givTensor);
-        const auto unrollData = THFloatTensor_data(opProcMat);
-
-        // Ok, so now the proc mat has been filled, so we simply need to copy the respective
-        // elements back into the input grad buffer
-        int64_t iChan = 0;
-        //#pragma omp parallel for private(iChan)
-        for (iChan = 0; iChan < nInputPlane; ++iChan)
-        {
-            auto giChanData = giData + iChan * chanSize;
-
-            k = 0;
-            for (int64_t kR = -hkH; kR <= hkH; kR += dkH)
+            for (int64_t sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx)
             {
-                for (int64_t kC = -hkW; kC <= hkW; kC += dkW, ++k)
+                const int64_t ySampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2];
+                const int64_t xSampleOff = pOffsetData[outputIdx * nSamples * 2 + sampleIdx * 2 + 1];
+
+                const int64_t yStart = max<int64_t>(0, -ySampleOff);
+                const int64_t yEnd = min(height, height - ySampleOff);
+
+                const int64_t xStart = max<int64_t>(0, -xSampleOff);
+                const int64_t xEnd = min(width, width - xSampleOff);
+
+                for (int64_t inputIdx = 0; inputIdx < nInputPlane; ++inputIdx)
                 {
-                    auto rowUnroll = unrollData + iChan * kSize * chanSize + k * chanSize;
+                    const float sampleWeight = pWeightData[outputIdx * nInputPlane * nSamples + inputIdx * nSamples + sampleIdx];
 
-                    for (int64_t r = 0; r < height; ++r)
+                    float *pGradInputPlane = pGradInputData + imageIdx * inputImgSize + inputIdx * chanSize;
+                    const float *pGradOutputPlane = pGradOutputData + imageIdx * outputImgSize + outputIdx * chanSize;
+
+                    for (int64_t y = yStart; y < yEnd; ++y)
                     {
-                        int64_t ipR = r + kR;
+                        const int64_t sY = y + ySampleOff;
 
-                        if (ipR >= 0 && ipR < height)
+                        float *pGradInputRow = pGradInputPlane + sY * width;
+                        const float *pGradOutputRow = pGradOutputPlane + y * width;
+
+                        for (int64_t x = xStart; x < xEnd; ++x)
                         {
-                            for (int64_t c = 0; c < width; ++c)
-                            {
-                                int64_t ipC = c + kC;
+                            const int64_t sX = x + xSampleOff;
 
-                                if (ipC >= 0 && ipC < width)
-                                {
-                                    const float val = rowUnroll[r * width + c];       
-
-                                    giChanData[ipR * width + ipC] += val;
-                                }
-                            }
+                            const float gradOutputVal = pGradOutputRow[x];
+                            pGradInputRow[sX] += sampleWeight * gradOutputVal;
                         }
                     }
                 }
@@ -311,14 +273,7 @@ int SparseFilterConvo::UpdateGradInput(lua_State *L)
         }
     }
 
-    // Free the processing tensors
-    THFloatTensor_free(wvTensor);
-    THFloatTensor_free(givTensor);
-    THFloatTensor_free(govTensor);
-    THFloatTensor_free(procVTensor);
-    THLongStorage_free(govSize);
-
-    return 1;
+    return 0;
 }
 
 int SparseFilterConvo::AccGradParameters(lua_State *L)

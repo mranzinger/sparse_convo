@@ -13,6 +13,8 @@ local roundf = function(x)
 end
 
 function SparseFilterConvo:__init(scales, numSamples)
+    parent.__init(self)
+
     --Assumes stride of 1 and sufficient padding to preserve input
     --width and height
 
@@ -32,7 +34,7 @@ function SparseFilterConvo:__init(scales, numSamples)
     for _, scale in ipairs(scales) do
         local targetSize, numFilters = unpack(scale)
         assert(numSamples <= targetSize * targetSize, 'Invalid number of samples. Must be less than or equal to the target size squared')
-        targetSize = targetSize / 2
+        targetSize = (targetSize - 1) / 2
 
         for i=1, numFilters do
             local fTable = { }
